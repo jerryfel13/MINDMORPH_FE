@@ -38,11 +38,7 @@ export default function WelcomeScreen() {
           <Text style={styles.subtitle}>Your learning style evolves with you</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.cta}
-          activeOpacity={0.85}
-          onPress={() => router.push("/onboarding")}
-        >
+        <TouchableOpacity style={styles.cta} activeOpacity={0.85} onPress={() => router.push("/register")}>
           <Text style={styles.ctaText}>Get Started</Text>
         </TouchableOpacity>
       </SafeAreaView>
