@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,23 +12,66 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { login as loginAPI } from "@/lib/api";
+import { storeToken, storeUserData } from "@/lib/storage";
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
       setFormError("Email and password are required.");
       return;
     }
 
     setFormError("");
+    setIsLoading(true);
 
-    // TODO: Replace with authentication call
-    router.push("/onboarding");
+    try {
+      // Call the login API
+      const response = await loginAPI({
+        email: email.trim(),
+        password: password.trim(),
+      });
+
+      // Store token and user data
+      await storeToken(response.token);
+      await storeUserData({
+        email: response.email,
+        fullName: response.fullName,
+        avatarUrl: response.avatarUrl,
+        preferredLanguage: response.preferredLanguage,
+        learningStyle: response.learningStyle,
+      });
+
+      // Navigate to onboarding or home screen
+      router.push("/onboarding");
+    } catch (error: any) {
+      // Handle error - show user-friendly message
+      const errorMessage = error.message || "Login failed. Please try again.";
+      
+      // Clean up the error message if it contains technical details
+      let userMessage = errorMessage;
+      if (errorMessage.includes("Cannot connect to server")) {
+        userMessage = "Cannot connect to server. Please check your connection.";
+      } else if (errorMessage.includes("Invalid email or password")) {
+        userMessage = "Invalid email or password. Please check your credentials.";
+      }
+      
+      setFormError(userMessage);
+      console.error("Login error:", error);
+      
+      // Auto-dismiss error after 5 seconds
+      setTimeout(() => {
+        setFormError("");
+      }, 5000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -109,7 +153,10 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 placeholder="you@example.com"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (formError) setFormError("");
+                }}
               />
             </View>
 
@@ -122,7 +169,10 @@ export default function LoginScreen() {
                 secureTextEntry
                 placeholder="Enter your password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (formError) setFormError("");
+                }}
               />
             </View>
 
@@ -135,18 +185,37 @@ export default function LoginScreen() {
 
           {formError ? (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{formError}</Text>
+              <View style={styles.errorContent}>
+                <Ionicons name="alert-circle" size={18} color="#B91C1C" />
+                <Text style={styles.errorText}>{formError}</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setFormError("")}
+                activeOpacity={0.7}
+                style={styles.errorCloseButton}
+              >
+                <Ionicons name="close" size={18} color="#B91C1C" />
+              </TouchableOpacity>
             </View>
           ) : null}
 
-          <TouchableOpacity activeOpacity={0.9} style={styles.submitButton} onPress={handleSubmit}>
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            style={[styles.submitButton, isLoading && styles.submitButtonDisabled]} 
+            onPress={handleSubmit}
+            disabled={isLoading}
+          >
             <LinearGradient
               colors={["#1890FF", "#17C9B5"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.submitButtonGradient}
             >
-              <Text style={styles.submitButtonText}>Log In</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.submitButtonText}>Log In</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
@@ -364,12 +433,27 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  errorContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
   },
   errorText: {
     fontFamily: "Roboto_500Medium",
     fontSize: 13,
     color: "#B91C1C",
-    textAlign: "center",
+    flex: 1,
+  },
+  errorCloseButton: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(239,68,68,0.15)",
   },
   submitButton: {
     borderRadius: 999,
@@ -378,6 +462,9 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 12 },
     overflow: "hidden",
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
   },
   submitButtonGradient: {
     borderRadius: 999,
