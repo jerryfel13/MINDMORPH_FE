@@ -39,6 +39,8 @@ export interface GeneratedContent {
     description: string;
     content: string;
     colorScheme?: string;
+    imageUrl?: string; // URL to generated image
+    imagePrompt?: string; // Prompt used for image generation
   }>;
   stepByStepGuide?: Array<{
     step: number;
@@ -63,6 +65,7 @@ export interface GeneratedContent {
   }>;
   audioSummary?: string;
   audioFiles?: {
+    combined?: string; // Single combined audio file
     introduction?: string;
     sections?: Array<{
       sectionIndex: number;
@@ -94,6 +97,14 @@ export interface GeneratedContent {
     explanation?: string;
   }>;
   summary?: string;
+  // Video content (generated programmatically)
+  videoUrl?: string; // URL to generated video tutorial
+  // Related video links (AI-suggested external videos)
+  relatedVideoLinks?: Array<{
+    title: string;
+    url: string;
+    description: string;
+  }>;
 }
 
 /**

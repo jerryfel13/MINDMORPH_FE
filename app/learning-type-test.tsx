@@ -12,15 +12,26 @@ import { generateQuiz } from "../lib/ai-service";
 import { getRecommendedMode, MLRecommendation } from "../lib/ml-service";
 import { getToken } from "../lib/storage";
 
-// Try to import expo-av, but handle if it's not available
+// Import expo-audio and expo-video (replacing deprecated expo-av)
 let Audio: any = null;
-let AVPlaybackStatus: any = null;
+let VideoView: any = null;
+let useVideoPlayer: any = null;
 try {
-  const expoAv = require("expo-av");
-  Audio = expoAv.Audio;
-  AVPlaybackStatus = expoAv.AVPlaybackStatus;
+  const expoAudio = require("expo-audio");
+  Audio = expoAudio.Audio;
 } catch (error) {
-  console.warn("expo-av not available, using fallback audio player");
+  console.warn("expo-audio not available, using fallback audio player");
+}
+try {
+  // Import VideoView and useVideoPlayer from expo-video
+  const expoVideo = require("expo-video");
+  VideoView = expoVideo.VideoView;
+  useVideoPlayer = expoVideo.useVideoPlayer;
+  console.log('✅ expo-video imported successfully');
+} catch (error) {
+  console.warn("expo-video not available, using fallback video player:", error);
+  VideoView = null;
+  useVideoPlayer = null;
 }
 
 const LEARNING_TYPES = [
@@ -61,6 +72,11 @@ export default function LearningTypeTestScreen() {
   const [mlRecommendation, setMlRecommendation] = useState<MLRecommendation | null>(null);
   const [loadingRecommendation, setLoadingRecommendation] = useState(false);
   
+  // Engagement tracking state
+  const [audioPlayCount, setAudioPlayCount] = useState(0);
+  const [readingStartTime, setReadingStartTime] = useState<number | null>(null);
+  const [readingTimeSeconds, setReadingTimeSeconds] = useState(0);
+  
   const { content, loading: contentLoading, error: contentError, generateForMode } = useAIContent();
   
   const subject = params.subject || "math";
@@ -91,6 +107,18 @@ export default function LearningTypeTestScreen() {
     return `${API_URL}${audioPath}`;
   };
 
+  // Helper function to get full video URL
+  const getVideoUrl = (videoPath: string): string => {
+    if (!videoPath) return '';
+    if (videoPath.startsWith('http')) return videoPath;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://192.168.100.66:4000`;
+    // Ensure videoPath starts with /
+    const normalizedPath = videoPath.startsWith('/') ? videoPath : `/${videoPath}`;
+    const fullUrl = `${API_URL}${normalizedPath}`;
+    console.log('🎥 Constructed video URL:', fullUrl);
+    return fullUrl;
+  };
+
   // Audio player state
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<Record<string, any>>({});
@@ -119,6 +147,33 @@ export default function LearningTypeTestScreen() {
       }
     };
   }, []);
+
+  // Track reading time for text learning
+  useEffect(() => {
+    if (selectedType === "text" && currentStep === "learning") {
+      // Start tracking when entering text learning and content is loaded
+      if (readingStartTime === null && content && !contentLoading) {
+        const startTime = Date.now();
+        setReadingStartTime(startTime);
+        setReadingTimeSeconds(0);
+      }
+      
+      // Update reading time every second while on text learning step
+      const interval = setInterval(() => {
+        if (readingStartTime !== null) {
+          const elapsed = Math.floor((Date.now() - readingStartTime) / 1000);
+          setReadingTimeSeconds(elapsed);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else if (currentStep !== "learning" && readingStartTime !== null) {
+      // Calculate final reading time when leaving learning step
+      const finalTime = Math.floor((Date.now() - readingStartTime) / 1000);
+      setReadingTimeSeconds(finalTime);
+      setReadingStartTime(null);
+    }
+  }, [selectedType, currentStep, readingStartTime, content, contentLoading]);
 
   // Audio player component
   const AudioPlayer = ({ audioUrl, label }: { audioUrl: string; label: string }) => {
@@ -166,6 +221,11 @@ export default function LearningTypeTestScreen() {
           );
           audioRefs.current[fullUrl] = sound;
           setPlayingAudio(fullUrl);
+          
+          // Track audio play count (increment each time audio starts playing)
+          if (selectedType === "audio") {
+            setAudioPlayCount(prev => prev + 1);
+          }
 
           // Handle playback finish
           sound.setOnPlaybackStatusUpdate((status: any) => {
@@ -207,9 +267,146 @@ export default function LearningTypeTestScreen() {
     );
   };
 
+  // Video player component
+  const VideoPlayer = ({ videoUrl, label }: { videoUrl: string; label: string }) => {
+    const fullUrl = getVideoUrl(videoUrl);
+    const [hasError, setHasError] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // expo-video 3.0 REQUIRES useVideoPlayer hook - cannot use source prop directly
+    // Hook must be called unconditionally, so we always call it
+    const player = useVideoPlayer ? useVideoPlayer(fullUrl || '') : null;
+    
+    // Configure player when it's created
+    useEffect(() => {
+      if (player && fullUrl) {
+        try {
+          player.loop = false;
+          player.muted = false;
+        } catch (error) {
+          console.error('Error configuring player:', error);
+        }
+      }
+    }, [player, fullUrl]);
+
+    // Log video URL for debugging
+    useEffect(() => {
+      if (fullUrl) {
+        console.log('🎥 VideoPlayer - URL:', fullUrl);
+        console.log('🎥 VideoPlayer - VideoView available:', !!VideoView);
+        console.log('🎥 VideoPlayer - useVideoPlayer available:', !!useVideoPlayer);
+        console.log('🎥 VideoPlayer - player created:', !!player);
+      }
+    }, [fullUrl, player]);
+
+    // Update player source when URL changes (use replaceAsync to avoid iOS UI freezes)
+    useEffect(() => {
+      if (player && fullUrl) {
+        setIsLoading(true);
+        // Use replaceAsync instead of replace to avoid iOS UI freezes
+        const updateSource = async () => {
+          try {
+            if (player.replaceAsync) {
+              await player.replaceAsync(fullUrl);
+            } else {
+              // Fallback for older versions
+              player.replace(fullUrl);
+            }
+            setIsLoading(false);
+          } catch (error) {
+            console.error('Error updating player source:', error);
+            setHasError(true);
+            setIsLoading(false);
+          }
+        };
+        updateSource();
+      } else if (!useVideoPlayer && fullUrl) {
+        setIsLoading(false);
+      }
+    }, [player, fullUrl, useVideoPlayer]);
+
+    if (!fullUrl || !VideoView) {
+      return (
+        <View style={styles.videoPlaceholder}>
+          <MaterialCommunityIcons name="video-off" size={32} color="#94A3B8" />
+          <Text style={styles.videoPlaceholderText}>
+            {!VideoView ? "Video player not available" : "Video not available"}
+          </Text>
+          {fullUrl && (
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8 }]}
+              onPress={() => Linking.openURL(fullUrl)}
+            >
+              <Text style={styles.primaryButtonText}>Open Video in Browser</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+
+    if (hasError) {
+      return (
+        <View style={styles.videoPlaceholder}>
+          <MaterialCommunityIcons name="alert-circle" size={32} color="#EF4444" />
+          <Text style={styles.videoPlaceholderText}>
+            Unable to load video
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8 }]}
+            onPress={() => Linking.openURL(fullUrl)}
+          >
+            <Text style={styles.primaryButtonText}>Open Video in Browser</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.videoContainer}>
+        {isLoading && (
+          <View style={[styles.video, { position: 'absolute', justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', zIndex: 1 }]}>
+            <ActivityIndicator size="large" color="#10B981" />
+            <Text style={[styles.videoPlaceholderText, { color: '#fff', marginTop: 12 }]}>Loading video...</Text>
+          </View>
+        )}
+        {VideoView && player && useVideoPlayer ? (
+          // expo-video 3.0 requires player prop (not source prop)
+          <VideoView
+            player={player}
+            style={styles.video}
+            nativeControls={true}
+            contentFit="contain"
+            allowsPictureInPicture={true}
+          />
+        ) : VideoView ? (
+          // Fallback if useVideoPlayer is not available (shouldn't happen in expo-video 3.0)
+          <View style={[styles.video, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+            <MaterialCommunityIcons name="alert-circle" size={48} color="#EF4444" />
+            <Text style={[styles.videoPlaceholderText, { color: '#fff', marginTop: 12 }]}>
+              Video player hook not available
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.video, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+            <MaterialCommunityIcons name="video-off" size={48} color="#94A3B8" />
+            <Text style={[styles.videoPlaceholderText, { color: '#fff', marginTop: 12 }]}>
+              Video player not available
+            </Text>
+          </View>
+        )}
+        <Text style={styles.videoLabel}>{label}</Text>
+      </View>
+    );
+  };
+
   const handleSelectType = async (typeId: string) => {
     setSelectedType(typeId);
     setCurrentStep("learning");
+    // Reset engagement tracking when switching learning types
+    setAudioPlayCount(0);
+    setReadingTimeSeconds(0);
+    setReadingStartTime(null);
+    
     // Generate content for selected learning type
     try {
       await generateForMode(subject, topic, typeId as 'visual' | 'audio' | 'text', "medium");
@@ -220,8 +417,138 @@ export default function LearningTypeTestScreen() {
   };
 
   const handleStartQuiz = async () => {
-    if (!selectedType) return;
+    console.log("🔵 ========== handleStartQuiz CALLED ==========");
+    console.log(`   Selected Type: ${selectedType}`);
+    console.log(`   Subject: ${subject}`);
+    console.log(`   Topic: ${topic}`);
+    console.log(`   Reading Time State: ${readingTimeSeconds}s`);
+    console.log(`   Audio Play Count State: ${audioPlayCount}`);
+    console.log(`   Reading Start Time: ${readingStartTime}`);
     
+    if (!selectedType) {
+      console.error("❌ No selected type, cannot start quiz");
+      alert("Please select a learning type first");
+      return;
+    }
+    
+    if (!subject || subject.trim() === '') {
+      console.error("❌ Subject is missing or empty");
+      alert("Subject is required");
+      return;
+    }
+    
+    // Calculate final reading time if still tracking
+    let finalReadingTime = readingTimeSeconds;
+    if (readingStartTime !== null) {
+      finalReadingTime = Math.floor((Date.now() - readingStartTime) / 1000);
+      setReadingTimeSeconds(finalReadingTime);
+      setReadingStartTime(null);
+    }
+    
+    // Log tracked engagement metrics
+    console.log("📊 Engagement Metrics Before Quiz:");
+    console.log(`   Learning Type: ${selectedType}`);
+    console.log(`   Reading Time (seconds): ${finalReadingTime}`);
+    console.log(`   Audio Play Count: ${audioPlayCount}`);
+    
+    // Save engagement data to activity_logs BEFORE starting quiz
+    console.log("🔄 Starting engagement data save process...");
+    try {
+      const token = await getToken();
+      console.log(`   Token retrieved: ${token ? 'Yes' : 'No'}`);
+      if (!token) {
+        console.error("❌ No token found, skipping engagement data save before quiz");
+        alert("Authentication error: Please log in again");
+        // Still proceed with quiz generation even if save fails
+      } else {
+        const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.100.66:4000";
+        
+        // Validate subject before creating payload
+        if (!subject || subject.trim() === '') {
+          console.error("❌ Subject is empty, cannot save activity");
+          throw new Error("Subject is required");
+        }
+        
+        const activityPayload: any = {
+          subject: subject.trim(), // Ensure no whitespace
+          activity_type: selectedType,
+          reading_time: selectedType === "text" ? finalReadingTime : 0,
+          playback_time: selectedType === "audio" ? audioPlayCount : 0,
+        };
+        
+        // Validate payload before sending
+        if (!activityPayload.subject || !activityPayload.activity_type) {
+          console.error("❌ Invalid payload:", activityPayload);
+          throw new Error("Missing required fields in payload");
+        }
+        
+        console.log("📤 Saving engagement data to activity_logs before quiz:");
+        console.log(`   Endpoint: ${API_URL}/activity`);
+        console.log(`   Reading Time: ${activityPayload.reading_time}s`);
+        console.log(`   Playback Time: ${activityPayload.playback_time}`);
+        console.log(`   Full payload:`, JSON.stringify(activityPayload, null, 2));
+        console.log(`   Token present: ${token ? 'Yes' : 'No'}`);
+        console.log(`   Token preview: ${token ? token.substring(0, 20) + '...' : 'N/A'}`);
+        
+        const fetchStartTime = Date.now();
+        console.log(`   Sending request at ${new Date().toISOString()}...`);
+        
+        const activityResponse = await fetch(`${API_URL}/activity`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify(activityPayload),
+        });
+        
+        const fetchDuration = Date.now() - fetchStartTime;
+        console.log(`   Response received after ${fetchDuration}ms`);
+        console.log(`   Response status: ${activityResponse.status} ${activityResponse.statusText}`);
+        
+        if (!activityResponse.ok) {
+          const errorText = await activityResponse.text().catch(() => '');
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { message: errorText };
+          }
+          console.error("❌ Failed to save engagement data before quiz:");
+          console.error(`   Status: ${activityResponse.status}`);
+          console.error(`   Error:`, errorData);
+        } else {
+          const activityData = await activityResponse.json();
+          console.log("✅ ========== SUCCESS: Engagement data saved! ==========");
+          console.log(`   Activity ID: ${activityData.activity?.id || 'N/A'}`);
+          console.log(`   Saved Reading Time: ${activityData.activity?.reading_time ?? 'N/A'}s`);
+          console.log(`   Saved Playback Time: ${activityData.activity?.playback_time ?? 'N/A'}`);
+          console.log(`   Saved Subject: ${activityData.activity?.subject || 'N/A'}`);
+          console.log(`   Full response:`, JSON.stringify(activityData, null, 2));
+          
+          // Verify the saved values match what we sent
+          if (activityData.activity) {
+            const savedRT = activityData.activity.reading_time ?? 0;
+            const savedPT = activityData.activity.playback_time ?? 0;
+            if (savedRT !== activityPayload.reading_time) {
+              console.warn(`⚠️ Reading time mismatch! Sent: ${activityPayload.reading_time}, Saved: ${savedRT}`);
+            }
+            if (savedPT !== activityPayload.playback_time) {
+              console.warn(`⚠️ Playback time mismatch! Sent: ${activityPayload.playback_time}, Saved: ${savedPT}`);
+            }
+          }
+        }
+      }
+    } catch (activityError) {
+      console.error("❌ ========== ERROR saving engagement data ==========");
+      console.error("   Error:", activityError);
+      console.error("   Error type:", activityError instanceof Error ? activityError.constructor.name : typeof activityError);
+      console.error("   Error message:", activityError instanceof Error ? activityError.message : String(activityError));
+      console.error("   Error stack:", activityError instanceof Error ? activityError.stack : 'N/A');
+      // Don't block quiz generation if this fails, but log the error clearly
+    }
+    
+    // Now proceed with quiz generation
     setQuizLoading(true);
     try {
       const quizData = await generateQuiz(subject, topic, selectedType as any, "medium", 5);
@@ -271,32 +598,133 @@ export default function LearningTypeTestScreen() {
     
     setCurrentStep("results");
     
-    // Log activity to backend (for ML analysis)
+    // Note: Reading time and playback count were already saved to activity_logs 
+    // when user clicked "I'm Ready for the Quiz"
+    // Now we just need to save quiz results and update adaptive content
+    
+    // Calculate final reading time for reference (already saved before quiz)
+    let finalReadingTime = readingTimeSeconds;
+    if (readingStartTime !== null) {
+      finalReadingTime = Math.floor((Date.now() - readingStartTime) / 1000);
+      setReadingTimeSeconds(finalReadingTime);
+      setReadingStartTime(null);
+    }
+    
+    // Log quiz results
+    console.log("📊 Quiz Results:");
+    console.log(`   Learning Type: ${selectedType}`);
+    console.log(`   Quiz Score: ${score}%`);
+    console.log(`   Correct: ${correct}/${quiz.questions.length}`);
+    
+    // Save detailed quiz progress to backend (includes quiz score)
     try {
       const token = await getToken();
       if (!token) {
-        console.warn("No token found, skipping activity log");
+        console.warn("No token found, skipping quiz progress save");
         return;
       }
       
       const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.100.66:4000";
-      await fetch(`${API_URL}/activity`, {
+      
+      // Prepare detailed quiz progress data
+      const quizProgressData = {
+        subject,
+        topic,
+        learning_type: selectedType,
+        difficulty: "medium", // Can be made dynamic if needed
+        total_questions: quiz.questions.length,
+        correct_answers: correct,
+        score: score,
+        time_taken: null, // Can be tracked if needed
+        audio_play_count: selectedType === "audio" ? audioPlayCount : 0,
+        video_play_count: 0, // For future video implementation
+        reading_time_seconds: selectedType === "text" ? finalReadingTime : 0,
+        responses: quiz.questions.map((q: any, index: number) => ({
+          question_id: q.id || index,
+          question_text: q.question,
+          question_type: q.type || "multiple_choice",
+          user_answer: quizAnswers[q.id] || null,
+          correct_answer: q.correctAnswer,
+          is_correct: quizAnswers[q.id] === q.correctAnswer,
+          explanation: q.explanation || null,
+        })),
+      };
+      
+      console.log("📤 Sending quiz progress to backend:");
+      console.log(`   Endpoint: ${API_URL}/quiz-progress`);
+      console.log(`   Reading Time (seconds): ${quizProgressData.reading_time_seconds}`);
+      console.log(`   Audio Play Count: ${quizProgressData.audio_play_count}`);
+      console.log(`   Learning Type: ${quizProgressData.learning_type}`);
+      
+      // Save detailed quiz progress
+      const progressResponse = await fetch(`${API_URL}/quiz-progress`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          subject,
-          activity_type: selectedType,
-          quiz_score: Math.round(score),
-          focus_level: excels ? 85 : 60,
-          reading_time: 0,
-          playback_time: 0,
-        }),
+        body: JSON.stringify(quizProgressData),
       });
       
-      // Fetch ML recommendation after logging activity
+      if (!progressResponse.ok) {
+        const errorData = await progressResponse.json().catch(() => ({}));
+        console.error("❌ Failed to save detailed quiz progress:", errorData);
+        // Continue even if detailed save fails - still try to log basic activity
+      } else {
+        const progressData = await progressResponse.json();
+        console.log("✅ Quiz progress saved successfully!");
+        console.log(`   Activity ID: ${progressData.activity?.id || 'N/A'}`);
+        console.log(`   Saved Reading Time: ${progressData.activity?.reading_time || 'N/A'}s`);
+        console.log(`   Saved Playback Time: ${progressData.activity?.playback_time || 'N/A'}`);
+        console.log(`   Full Response:`, JSON.stringify(progressData, null, 2));
+      }
+      
+      // Save engagement data to adaptivecontent table
+      try {
+        const engagementPayload = {
+          subject,
+          topic,
+          learning_type: selectedType,
+          audio_play_count: selectedType === "audio" ? audioPlayCount : 0,
+          video_play_count: 0, // For future video implementation
+          reading_time_seconds: selectedType === "text" ? finalReadingTime : 0,
+          quiz_score: Math.round(score),
+        };
+        
+        console.log("📤 Sending engagement data to backend:");
+        console.log(`   Endpoint: ${API_URL}/adaptive-content`);
+        console.log(`   Reading Time (seconds): ${engagementPayload.reading_time_seconds}`);
+        console.log(`   Audio Play Count: ${engagementPayload.audio_play_count}`);
+        
+        const engagementResponse = await fetch(`${API_URL}/adaptive-content`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify(engagementPayload),
+        });
+        
+        if (!engagementResponse.ok) {
+          const errorData = await engagementResponse.json().catch(() => ({}));
+          console.error("❌ Failed to save engagement data:", errorData);
+        } else {
+          const engagementData = await engagementResponse.json();
+          console.log("✅ Engagement data saved successfully!");
+          console.log(`   Saved Reading Time: ${engagementData.data?.reading_time_seconds || 'N/A'}s`);
+          console.log(`   Saved Audio Play Count: ${engagementData.data?.audio_play_count || 'N/A'}`);
+          console.log(`   Confidence: ${engagementData.data?.confidence || 'N/A'}`);
+        }
+      } catch (engagementError) {
+        console.error("❌ Failed to save engagement data (non-critical):", engagementError);
+        // Don't block if engagement saving fails
+      }
+      
+      // Note: Activity was already logged to activity_logs when user clicked "I'm Ready for Quiz"
+      // The quiz-progress endpoint also saves to activity_logs with the quiz score
+      // So we don't need to call /activity again here
+      
+      // Fetch ML recommendation after saving quiz progress
       setLoadingRecommendation(true);
       try {
         const recommendation = await getRecommendedMode(subject);
@@ -309,7 +737,8 @@ export default function LearningTypeTestScreen() {
         setLoadingRecommendation(false);
       }
     } catch (error) {
-      console.error("Failed to log activity:", error);
+      console.error("Failed to save quiz progress:", error);
+      // Don't block the UI if saving fails
     }
   };
 
@@ -439,16 +868,85 @@ export default function LearningTypeTestScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>{content.title || topic}</Text>
                 
+                {/* Video Player - Show for visual and text content */}
+                {(selectedType === "visual" || selectedType === "text") && (
+                  <View style={styles.contentSection}>
+                    <Text style={styles.sectionTitle}>Video Tutorial</Text>
+                    {content.videoUrl ? (
+                      VideoView ? (
+                        <VideoPlayer
+                          videoUrl={content.videoUrl}
+                          label="Watch Video Tutorial"
+                        />
+                      ) : (
+                        <View style={styles.videoPlaceholder}>
+                          <MaterialCommunityIcons name="video-off" size={32} color="#94A3B8" />
+                          <Text style={styles.videoPlaceholderText}>Video player not available</Text>
+                        </View>
+                      )
+                    ) : (
+                      <View style={styles.videoPlaceholder}>
+                        <MaterialCommunityIcons name="video" size={32} color="#94A3B8" />
+                        <Text style={styles.videoPlaceholderText}>
+                          Video tutorial will be generated automatically
+                        </Text>
+                        <Text style={[styles.videoPlaceholderText, { fontSize: 12, marginTop: 4, fontStyle: 'italic' }]}>
+                          (Requires FFmpeg to be installed on the server)
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+                
                 {/* Visual Content */}
                 {selectedType === "visual" && content.visualElements && (
                   <View>
-                    {content.visualElements.map((element, index) => (
-                      <View key={index} style={styles.contentSection}>
-                        <Text style={styles.sectionTitle}>{renderSafeContent(element.type)}</Text>
-                        <Text style={styles.contentText}>{renderSafeContent(element.description)}</Text>
-                        <Text style={styles.contentText}>{renderSafeContent(element.content)}</Text>
-                      </View>
-                    ))}
+                    {content.visualElements.map((element: any, index) => {
+                      const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.100.66:4000";
+                      const imageUrl = element.imageUrl 
+                        ? (element.imageUrl.startsWith('http') 
+                            ? element.imageUrl 
+                            : `${API_URL}${element.imageUrl}`)
+                        : null;
+                      
+                      return (
+                        <View key={index} style={styles.contentSection}>
+                          <Text style={styles.sectionTitle}>
+                            {renderSafeContent(element.type || 'Visual Element')}
+                          </Text>
+                          
+                          {/* Note: Images are generated programmatically when creating videos */}
+                          {/* For now, show visual description - video will be shown above if available */}
+                          <View style={styles.visualDescriptionBox}>
+                            <MaterialCommunityIcons name="eye" size={24} color="#0EA5E9" />
+                            <Text style={styles.visualDescriptionText}>
+                              Visual content will be shown in the video tutorial above
+                            </Text>
+                          </View>
+                          
+                          {element.description && (
+                            <Text style={styles.contentText}>
+                              {renderSafeContent(element.description)}
+                            </Text>
+                          )}
+                          
+                          {element.content && (
+                            <Text style={styles.contentText}>
+                              {renderSafeContent(element.content)}
+                            </Text>
+                          )}
+                          
+                          {element.colorScheme && (
+                            <View style={styles.colorSchemeContainer}>
+                              <MaterialCommunityIcons name="palette" size={16} color="#64748B" />
+                              <Text style={styles.colorSchemeText}>
+                                Color Scheme: {renderSafeContent(element.colorScheme)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
                     {content.stepByStepGuide && (
                       <View style={styles.contentSection}>
                         <Text style={styles.sectionTitle}>Step-by-Step Guide</Text>
@@ -458,6 +956,54 @@ export default function LearningTypeTestScreen() {
                             <Text style={styles.contentText}>{renderSafeContent(step.visualDescription)}</Text>
                             <Text style={styles.contentText}>{renderSafeContent(step.explanation)}</Text>
                           </View>
+                        ))}
+                      </View>
+                    )}
+                    
+                    {/* Summary for visual content */}
+                    {content.summary && (
+                      <View style={styles.contentSection}>
+                        <Text style={styles.sectionTitle}>Summary</Text>
+                        <Text style={styles.contentText}>{renderSafeContent(content.summary)}</Text>
+                      </View>
+                    )}
+                    
+                    {/* Related Video Links for visual */}
+                    {content.relatedVideoLinks && content.relatedVideoLinks.length > 0 && (
+                      <View style={styles.contentSection}>
+                        <Text style={styles.sectionTitle}>📺 Related Video Resources</Text>
+                        <Text style={[styles.contentText, { marginBottom: 12, fontSize: 14, color: '#64748B' }]}>
+                          Check out these additional video tutorials to enhance your learning:
+                        </Text>
+                        {content.relatedVideoLinks.map((video, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={styles.videoLinkCard}
+                            onPress={() => {
+                              if (video.url) {
+                                Linking.openURL(video.url).catch(err => 
+                                  console.error('Failed to open video URL:', err)
+                                );
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.videoLinkContent}>
+                              <MaterialCommunityIcons name="play-circle" size={24} color="#10B981" />
+                              <View style={styles.videoLinkText}>
+                                <Text style={styles.videoLinkTitle}>{renderSafeContent(video.title)}</Text>
+                                {video.description && (
+                                  <Text style={styles.videoLinkDescription}>
+                                    {renderSafeContent(video.description)}
+                                  </Text>
+                                )}
+                                <Text style={styles.videoLinkUrl} numberOfLines={1}>
+                                  {video.url}
+                                </Text>
+                              </View>
+                              <MaterialCommunityIcons name="open-in-new" size={20} color="#94A3B8" />
+                            </View>
+                          </TouchableOpacity>
                         ))}
                       </View>
                     )}
@@ -511,6 +1057,46 @@ export default function LearningTypeTestScreen() {
                         <Text style={styles.contentText}>{renderSafeContent(content.audioSummary)}</Text>
                       </View>
                     )}
+                    
+                    {/* Related Video Links for audio */}
+                    {content.relatedVideoLinks && content.relatedVideoLinks.length > 0 && (
+                      <View style={styles.contentSection}>
+                        <Text style={styles.sectionTitle}>📺 Related Video Resources</Text>
+                        <Text style={[styles.contentText, { marginBottom: 12, fontSize: 14, color: '#64748B' }]}>
+                          Check out these additional video tutorials to enhance your learning:
+                        </Text>
+                        {content.relatedVideoLinks.map((video, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={styles.videoLinkCard}
+                            onPress={() => {
+                              if (video.url) {
+                                Linking.openURL(video.url).catch(err => 
+                                  console.error('Failed to open video URL:', err)
+                                );
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.videoLinkContent}>
+                              <MaterialCommunityIcons name="play-circle" size={24} color="#10B981" />
+                              <View style={styles.videoLinkText}>
+                                <Text style={styles.videoLinkTitle}>{renderSafeContent(video.title)}</Text>
+                                {video.description && (
+                                  <Text style={styles.videoLinkDescription}>
+                                    {renderSafeContent(video.description)}
+                                  </Text>
+                                )}
+                                <Text style={styles.videoLinkUrl} numberOfLines={1}>
+                                  {video.url}
+                                </Text>
+                              </View>
+                              <MaterialCommunityIcons name="open-in-new" size={20} color="#94A3B8" />
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -549,9 +1135,54 @@ export default function LearningTypeTestScreen() {
                   </View>
                 )}
 
+                {/* Related Video Links */}
+                {content.relatedVideoLinks && content.relatedVideoLinks.length > 0 && (
+                  <View style={styles.contentSection}>
+                    <Text style={styles.sectionTitle}>📺 Related Video Resources</Text>
+                    <Text style={[styles.contentText, { marginBottom: 12, fontSize: 14, color: '#64748B' }]}>
+                      Check out these additional video tutorials to enhance your learning:
+                    </Text>
+                    {content.relatedVideoLinks.map((video, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.videoLinkCard}
+                        onPress={() => {
+                          if (video.url) {
+                            Linking.openURL(video.url).catch(err => 
+                              console.error('Failed to open video URL:', err)
+                            );
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.videoLinkContent}>
+                          <MaterialCommunityIcons name="play-circle" size={24} color="#10B981" />
+                          <View style={styles.videoLinkText}>
+                            <Text style={styles.videoLinkTitle}>{renderSafeContent(video.title)}</Text>
+                            {video.description && (
+                              <Text style={styles.videoLinkDescription}>
+                                {renderSafeContent(video.description)}
+                              </Text>
+                            )}
+                            <Text style={styles.videoLinkUrl} numberOfLines={1}>
+                              {video.url}
+                            </Text>
+                          </View>
+                          <MaterialCommunityIcons name="open-in-new" size={20} color="#94A3B8" />
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
                 <TouchableOpacity 
                   style={styles.primaryButton} 
-                  onPress={handleStartQuiz}
+                  onPress={() => {
+                    console.log("🔘 Button pressed: I'm Ready for the Quiz");
+                    handleStartQuiz().catch((error) => {
+                      console.error("❌ Unhandled error in handleStartQuiz:", error);
+                    });
+                  }}
                 >
                   <Text style={styles.primaryButtonText}>I'm Ready for the Quiz</Text>
                 </TouchableOpacity>
@@ -773,25 +1404,52 @@ export default function LearningTypeTestScreen() {
               {/* ML Recommendation Section */}
               {mlRecommendation && (
                 <View style={styles.recommendationContainer}>
-                  <Text style={styles.sectionTitle}>AI Recommendation</Text>
+                  <View style={styles.recommendationHeaderSection}>
+                    <MaterialCommunityIcons name="brain" size={28} color="#0EA5E9" />
+                    <Text style={styles.recommendationSectionTitle}>AI-Powered Recommendation</Text>
+                  </View>
+                  
                   <View style={styles.recommendationCard}>
-                    <View style={styles.recommendationHeader}>
-                      <MaterialCommunityIcons name="brain" size={24} color="#0EA5E9" />
-                      <Text style={styles.recommendationTitle}>
-                        Recommended: {mlRecommendation.recommendedMode.charAt(0).toUpperCase() + mlRecommendation.recommendedMode.slice(1)} Learning
-                      </Text>
+                    {/* Recommended Mode Highlight */}
+                    <View style={styles.recommendedModeBanner}>
+                      <View style={styles.recommendedModeContent}>
+                        <MaterialCommunityIcons 
+                          name={LEARNING_TYPES.find(t => t.id === mlRecommendation.recommendedMode)?.icon as any || "brain"} 
+                          size={32} 
+                          color="#FFFFFF" 
+                        />
+                        <View style={styles.recommendedModeText}>
+                          <Text style={styles.recommendedModeLabel}>Recommended</Text>
+                          <Text style={styles.recommendedModeName}>
+                            {mlRecommendation.recommendedMode.charAt(0).toUpperCase() + mlRecommendation.recommendedMode.slice(1)} Learning
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.confidenceBadge}>
+                        <Text style={styles.confidenceBadgeText}>
+                          {Math.round(mlRecommendation.confidence * 100)}%
+                        </Text>
+                        <Text style={styles.confidenceLabel}>Confidence</Text>
+                      </View>
                     </View>
-                    <Text style={styles.recommendationText}>{mlRecommendation.reasoning}</Text>
-                    <Text style={styles.confidenceText}>
-                      Confidence: {Math.round(mlRecommendation.confidence * 100)}%
-                    </Text>
+
+                    {/* Reasoning */}
+                    <View style={styles.reasoningContainer}>
+                      <MaterialCommunityIcons name="lightbulb-on" size={20} color="#0EA5E9" />
+                      <Text style={styles.reasoningText}>{mlRecommendation.reasoning}</Text>
+                    </View>
                     
-                    {/* Show all learning types with recommendations */}
+                    {/* Learning Types Comparison */}
+                    <Text style={styles.comparisonTitle}>Performance Comparison</Text>
                     <View style={styles.learningTypesGrid}>
                       {LEARNING_TYPES.map((type) => {
                         const isRecommended = mlRecommendation.recommendedMode === type.id;
                         const isCurrent = selectedType === type.id;
                         const stats = mlRecommendation.modeStats?.[type.id as 'visual' | 'audio' | 'text'];
+                        const avgScore = stats && stats.totalSessions > 0 
+                          ? Math.round(stats.totalScore / stats.totalSessions) 
+                          : 0;
+                        const sessions = stats?.totalSessions || 0;
                         
                         return (
                           <TouchableOpacity
@@ -802,23 +1460,56 @@ export default function LearningTypeTestScreen() {
                               isCurrent && styles.recommendedTypeCardCurrent
                             ]}
                             onPress={() => handleTryRecommendedMode(type.id)}
+                            activeOpacity={0.7}
                           >
-                            <View style={[styles.typeIconContainer, { backgroundColor: `${type.color}20` }]}>
-                              <MaterialCommunityIcons name={type.icon as any} size={24} color={type.color} />
+                            <View style={[
+                              styles.typeIconContainer, 
+                              { 
+                                backgroundColor: `${type.color}15`,
+                                borderColor: isRecommended ? type.color : 'transparent',
+                                borderWidth: isRecommended ? 2 : 0,
+                              }
+                            ]}>
+                              <MaterialCommunityIcons name={type.icon as any} size={28} color={type.color} />
                             </View>
                             <Text style={styles.recommendedTypeLabel}>{type.label}</Text>
+                            
                             {isRecommended && (
                               <View style={styles.recommendedBadge}>
-                                <Text style={styles.recommendedBadgeText}>Recommended</Text>
+                                <MaterialCommunityIcons name="star" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                <Text style={styles.recommendedBadgeText}>Best</Text>
                               </View>
                             )}
-                            {isCurrent && (
-                              <Text style={styles.currentBadgeText}>Current</Text>
+                            
+                            {isCurrent && !isRecommended && (
+                              <View style={styles.currentBadge}>
+                                <Text style={styles.currentBadgeText}>Current</Text>
+                              </View>
                             )}
-                            {stats && (
-                              <Text style={styles.statsText}>
-                                Avg Score: {Math.round(stats.totalScore / Math.max(stats.totalSessions, 1))}%
-                              </Text>
+                            
+                            {sessions > 0 ? (
+                              <View style={styles.statsContainer}>
+                                <View style={[styles.statRow, { marginBottom: 4 }]}>
+                                  <Text style={styles.statLabel}>Avg Score</Text>
+                                  <Text style={[styles.statValue, { color: type.color }]}>
+                                    {avgScore}%
+                                  </Text>
+                                </View>
+                                <View style={[styles.statRow, { marginBottom: 4 }]}>
+                                  <Text style={styles.statLabel}>Sessions</Text>
+                                  <Text style={styles.statValue}>{sessions}</Text>
+                                </View>
+                                {stats && stats.avgFocus > 0 && (
+                                  <View style={styles.statRow}>
+                                    <Text style={styles.statLabel}>Focus</Text>
+                                    <Text style={styles.statValue}>{stats.avgFocus}%</Text>
+                                  </View>
+                                )}
+                              </View>
+                            ) : (
+                              <View style={styles.noDataContainer}>
+                                <Text style={styles.noDataText}>No data yet</Text>
+                              </View>
                             )}
                           </TouchableOpacity>
                         );
@@ -1040,6 +1731,51 @@ const styles = StyleSheet.create({
     color: "#334155",
     lineHeight: 24,
     marginBottom: 12,
+  },
+  imageContainer: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  visualImage: {
+    width: "100%",
+    height: 300,
+    backgroundColor: "#F8FAFC",
+  },
+  imagePlaceholder: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    padding: 32,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderStyle: "dashed",
+  },
+  imagePlaceholderText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#94A3B8",
+    marginLeft: 12,
+  },
+  colorSchemeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  colorSchemeText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+    marginLeft: 8,
   },
   audioPlayer: {
     flexDirection: "row",
@@ -1311,95 +2047,295 @@ const styles = StyleSheet.create({
   },
   recommendationContainer: {
     marginTop: 32,
+    marginBottom: 16,
   },
-  recommendationCard: {
-    backgroundColor: "#F0F9FF",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: "#BAE6FD",
-    marginTop: 12,
-  },
-  recommendationHeader: {
+  recommendationHeaderSection: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  recommendationTitle: {
-    fontSize: 18,
+  recommendationSectionTitle: {
+    fontSize: 20,
     fontFamily: "Montserrat_600SemiBold",
     color: "#0F172A",
     marginLeft: 12,
+  },
+  recommendationCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  recommendedModeBanner: {
+    backgroundColor: "#0EA5E9",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  recommendedModeContent: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
-  recommendationText: {
-    fontSize: 14,
-    fontFamily: "Roboto_400Regular",
-    color: "#334155",
-    lineHeight: 20,
-    marginBottom: 8,
+  recommendedModeText: {
+    marginLeft: 16,
   },
-  confidenceText: {
+  recommendedModeLabel: {
     fontSize: 12,
     fontFamily: "Roboto_500Medium",
-    color: "#0EA5E9",
+    color: "#BAE6FD",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  recommendedModeName: {
+    fontSize: 22,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#FFFFFF",
+    marginTop: 4,
+  },
+  confidenceBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minWidth: 80,
+  },
+  confidenceBadgeText: {
+    fontSize: 24,
+    fontFamily: "Montserrat_700Bold",
+    color: "#FFFFFF",
+  },
+  confidenceLabel: {
+    fontSize: 10,
+    fontFamily: "Roboto_400Regular",
+    color: "#BAE6FD",
+    marginTop: 2,
+  },
+  reasoningContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#F0F9FF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  reasoningText: {
+    fontSize: 15,
+    fontFamily: "Roboto_400Regular",
+    color: "#334155",
+    lineHeight: 22,
+    marginLeft: 12,
+    flex: 1,
+  },
+  comparisonTitle: {
+    fontSize: 16,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#0F172A",
     marginBottom: 16,
   },
   learningTypesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginTop: 8,
+    marginHorizontal: -6, // Negative margin to offset card margins
   },
   recommendedTypeCard: {
     flex: 1,
     minWidth: "30%",
+    maxWidth: "32%",
     borderRadius: 16,
     borderWidth: 2,
     borderColor: "#E2E8F0",
     padding: 16,
     alignItems: "center",
     backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginHorizontal: 6, // Spacing between cards
+    marginBottom: 12,
   },
   recommendedTypeCardHighlighted: {
     borderColor: "#0EA5E9",
     backgroundColor: "#F0F9FF",
     borderWidth: 3,
+    shadowColor: "#0EA5E9",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   recommendedTypeCardCurrent: {
     borderColor: "#10B981",
+    borderWidth: 2,
   },
   recommendedTypeLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Montserrat_600SemiBold",
     color: "#0F172A",
-    marginTop: 8,
+    marginBottom: 8,
     textAlign: "center",
   },
   recommendedBadge: {
     backgroundColor: "#0EA5E9",
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
   },
   recommendedBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Montserrat_600SemiBold",
     color: "#FFFFFF",
   },
-  currentBadgeText: {
-    fontSize: 10,
-    fontFamily: "Roboto_500Medium",
-    color: "#10B981",
-    marginTop: 4,
+  currentBadge: {
+    backgroundColor: "#10B981",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 12,
   },
-  statsText: {
+  currentBadgeText: {
+    fontSize: 11,
+    fontFamily: "Roboto_500Medium",
+    color: "#FFFFFF",
+  },
+  statsContainer: {
+    width: "100%",
+    marginTop: 8,
+  },
+  statRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  statLabel: {
     fontSize: 11,
     fontFamily: "Roboto_400Regular",
     color: "#64748B",
-    marginTop: 4,
+  },
+  statValue: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#0F172A",
+  },
+  noDataContainer: {
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  noDataText: {
+    fontSize: 11,
+    fontFamily: "Roboto_400Regular",
+    color: "#94A3B8",
+    fontStyle: "italic",
+  },
+  videoContainer: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#000000",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  video: {
+    width: "100%",
+    height: 300,
+    backgroundColor: "#000000",
+  },
+  videoLabel: {
+    fontSize: 14,
+    fontFamily: "Roboto_500Medium",
+    color: "#64748B",
+    marginTop: 8,
     textAlign: "center",
+  },
+  videoPlaceholder: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    padding: 32,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderStyle: "dashed",
+  },
+  videoPlaceholderText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#94A3B8",
+    marginLeft: 12,
+  },
+  visualDescriptionBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+  },
+  visualDescriptionText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#0EA5E9",
+    marginLeft: 12,
+    flex: 1,
+  },
+  videoLinkCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  videoLinkContent: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  videoLinkText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  videoLinkTitle: {
+    fontSize: 16,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  videoLinkDescription: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  videoLinkUrl: {
+    fontSize: 12,
+    fontFamily: "Roboto_400Regular",
+    color: "#10B981",
+    textDecorationLine: "underline",
   },
 });
 

@@ -272,13 +272,13 @@ export default function ModeSwitchScreen() {
                 <Text style={[styles.badgePrimaryText, dynamicStyles.badgeText]}>
                   Adaptive Session
                 </Text>
-              </View>
+            </View>
               <View style={[styles.badge, styles.badgeAccent, dynamicStyles.badge]}>
                 <Text style={[styles.badgeAccentText, dynamicStyles.badgeText]}>
                   {mlLoading ? "Analyzing..." : recommendation ? `ML: ${Math.round(recommendation.confidence * 100)}%` : "Switching Mode"}
                 </Text>
-              </View>
             </View>
+          </View>
 
             <Text style={[styles.cardTitle, dynamicStyles.cardTitle]}>
               {subjectLabel}
@@ -289,14 +289,14 @@ export default function ModeSwitchScreen() {
                 : recommendation 
                   ? recommendation.reasoning || "Monitoring live signals to confirm the optimal learning mode for this session."
                   : "Monitoring live signals to confirm the optimal learning mode for this session."}
-            </Text>
+          </Text>
 
             <View style={[styles.modeRow, dynamicStyles.modeRow, isCompact && styles.modeRowCompact]}>
-              {MODES.map((mode) => {
-                const isActive = mode.id === activeMode;
-                return (
+            {MODES.map((mode) => {
+              const isActive = mode.id === activeMode;
+              return (
                   <TouchableOpacity
-                    key={mode.id}
+                  key={mode.id}
                     style={[
                       styles.modeChip, 
                       dynamicStyles.modeChip,
@@ -313,24 +313,24 @@ export default function ModeSwitchScreen() {
                       });
                     }}
                     activeOpacity={0.7}
-                  >
-                    <MaterialCommunityIcons
-                      name={mode.icon as never}
+                >
+                  <MaterialCommunityIcons
+                    name={mode.icon as never}
                       size={dynamicStyles.modeIcon}
-                      color={isActive ? "#FFFFFF" : "#64748B"}
-                    />
+                    color={isActive ? "#FFFFFF" : "#64748B"}
+                  />
                     <Text style={[
                       styles.modeChipLabel, 
                       dynamicStyles.modeChipLabel,
                       isActive && styles.modeChipLabelActive
                     ]}>
-                      {mode.label}
-                    </Text>
+                    {mode.label}
+                  </Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-            
+              );
+            })}
+          </View>
+
             <TouchableOpacity
               style={styles.testButton}
               onPress={() => {
