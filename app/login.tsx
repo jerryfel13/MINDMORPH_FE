@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -8,7 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -73,7 +76,11 @@ export default function LoginScreen() {
       setIsLoading(false);
     }
   };
-
+  
+  const handleRegister = () => {
+    router.push("/register");
+  };
+  
   return (
     <LinearGradient colors={["#DDEBFF", "#F8FBFF"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
@@ -89,7 +96,7 @@ export default function LoginScreen() {
             start={{ x: 1, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={[styles.decorBlob, styles.decorBlobBottom]}
-          />
+            />
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
@@ -101,7 +108,7 @@ export default function LoginScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCardGradient}
-            >
+              >
               <View style={styles.heroBadgeRow}>
                 <View style={styles.heroBadge}>
                   <Text style={styles.heroBadgeText}>MindMorph</Text>
@@ -133,13 +140,20 @@ export default function LoginScreen() {
               </View>
             </LinearGradient>
           </View>
+          
+          {formError ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{formErrorMessage[0]}</Text>
+              <Text style={styles.errorText}>{formErrorMessage[1]}</Text>
+            </View>
+          ) : null}
 
           <LinearGradient
             colors={["rgba(255, 255, 255, 0.97)", "rgba(255, 255, 255, 0.85)"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.section}
-          >
+            >
             <View style={styles.sectionContent}>
               <Text style={styles.sectionTitle}>Account Access</Text>
 
@@ -176,7 +190,7 @@ export default function LoginScreen() {
               />
             </View>
 
-              <TouchableOpacity activeOpacity={0.85} onPress={() => router.push("/register")} style={styles.secondaryLink}>
+              <TouchableOpacity activeOpacity={0.85} onPress={handleRegister} style={styles.secondaryLink}>
                 <Text style={styles.secondaryLinkText}>Need an account? Register</Text>
                 <Ionicons name="arrow-forward" size={16} color="#2563EB" />
               </TouchableOpacity>

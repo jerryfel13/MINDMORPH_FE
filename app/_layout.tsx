@@ -1,7 +1,4 @@
-import { Stack, SplashScreen } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import { useFonts } from "expo-font";
+import "@/lib/nativewind";
 import {
   Montserrat_400Regular,
   Montserrat_500Medium,
@@ -9,9 +6,12 @@ import {
   Montserrat_700Bold,
 } from "@expo-google-fonts/montserrat";
 import { Roboto_400Regular, Roboto_500Medium } from "@expo-google-fonts/roboto";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useFonts } from "expo-font";
+import { SplashScreen, Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import "react-native-reanimated";
-import "@/lib/nativewind";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
