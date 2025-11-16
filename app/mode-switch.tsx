@@ -291,46 +291,6 @@ export default function ModeSwitchScreen() {
                   : "Monitoring live signals to confirm the optimal learning mode for this session."}
           </Text>
 
-            <View style={[styles.modeRow, dynamicStyles.modeRow, isCompact && styles.modeRowCompact]}>
-            {MODES.map((mode) => {
-              const isActive = mode.id === activeMode;
-              return (
-                  <TouchableOpacity
-                  key={mode.id}
-                    style={[
-                      styles.modeChip, 
-                      dynamicStyles.modeChip,
-                      isActive && styles.modeChipActive, 
-                      isCompact && styles.modeChipCompact
-                    ]}
-                    onPress={() => {
-                      router.push({
-                        pathname: "/learning-type-test",
-                        params: {
-                          subject: params.subject,
-                          topic: "Algebra Basics", // You can make this dynamic
-                        },
-                      });
-                    }}
-                    activeOpacity={0.7}
-                >
-                  <MaterialCommunityIcons
-                    name={mode.icon as never}
-                      size={dynamicStyles.modeIcon}
-                    color={isActive ? "#FFFFFF" : "#64748B"}
-                  />
-                    <Text style={[
-                      styles.modeChipLabel, 
-                      dynamicStyles.modeChipLabel,
-                      isActive && styles.modeChipLabelActive
-                    ]}>
-                    {mode.label}
-                  </Text>
-                  </TouchableOpacity>
-              );
-            })}
-          </View>
-
             <TouchableOpacity
               style={styles.testButton}
               onPress={() => {

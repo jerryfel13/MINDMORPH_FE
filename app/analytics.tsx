@@ -116,8 +116,6 @@ export default function AnalyticsScreen() {
     });
   }, [quizScores]); 
 
-  console.log(linePoints)
-
   return (
     <LinearGradient
       colors={["#F4F8FF", "#FFFFFF"]}
