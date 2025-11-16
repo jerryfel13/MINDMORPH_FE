@@ -1,155 +1,354 @@
-import { useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-const modes = [
-  { id: "visual", label: "Visual" },
-  { id: "audio", label: "Audio" },
-  { id: "text", label: "Text" },
-];
+export default function NewPage() {
+  const [toggles, setToggles] = useState({
+    visual: true,
+    audio: true,
+    text: true,
+  });
 
-export default function ModuleScreen() {
-  const [mode, setMode] = useState("visual");
-  const router = useRouter();
-  const params = useLocalSearchParams<{ subject?: string }>();
-  const subjectLabel = params.subject
-    ? params.subject.charAt(0).toUpperCase() + params.subject.slice(1)
-    : "Adaptive Learning";
+ const [toastMessage, setToastMessage] = useState("Adapting to Visual Mode");
+ 
+ const handleToggle = (key: "visual" | "audio" | "text") => {
+    setToggles(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-100">
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="mt-8 flex-row items-center justify-between">
-          <Text className="text-2xl font-montserrat-semibold text-slate-800">
-            {subjectLabel} Session
-          </Text>
-          <View className="rounded-full bg-teal-100 px-3 py-1">
-            <Text className="text-xs font-roboto text-teal-600">Adapting to {mode} mode</Text>
-          </View>
+    <View style={styles.container}>
+      <View style={styles.background}>
+        {/* Header Buttons */}
+        <View style={styles.headerSection}>
+          
+          {/* Visual */}
+          <Pressable
+            style={toggles.visual ? styles.activeHeaderButton : styles.headerButton}
+            onPress={() => handleToggle("visual")}
+          >
+            <Text style={toggles.visual ? styles.activeHeaderText : ""}>
+              Visual
+            </Text>
+            {toggles.visual && <View style={styles.activeCircle} />}
+          </Pressable>
+
+          {/* Audio */}
+          <Pressable
+            style={toggles.audio ? styles.activeHeaderButton : styles.headerButton}
+            onPress={() => handleToggle("audio")}
+          >
+            <Text style={toggles.audio ? styles.activeHeaderText : ""}>
+              Audio
+            </Text>
+            {toggles.audio && <View style={styles.activeCircle} />}
+          </Pressable>
+
+          {/* Text */}
+          <Pressable
+            style={toggles.text ? styles.activeHeaderButton : styles.headerButton}
+            onPress={() => handleToggle("text")}
+          >
+            <Text style={toggles.text ? styles.activeHeaderText : ""}>
+              Text
+            </Text>
+            {toggles.text && <View style={styles.activeCircle} />}
+          </Pressable>
+
         </View>
 
-        <View className="mt-6 flex-row items-center justify-between rounded-full bg-white p-2 shadow-sm">
-          {modes.map((item) => {
-            const isActive = item.id === mode;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                className={`flex-1 items-center rounded-full px-4 py-3 ${
-                  isActive ? "bg-teal-500 shadow-md shadow-teal-200" : ""
-                }`}
-                onPress={() => setMode(item.id)}
-                activeOpacity={0.85}
-              >
-                <Text
-                  className={`text-sm font-montserrat-medium ${
-                    isActive ? "text-white" : "text-slate-500"
-                  }`}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.middleSection}>
+            <View style={styles.videoContainer}></View>
+            <View style={styles.rightSideContainer}>
+                <View style={styles.toastModal}>
+                    <View style={styles.toastImage}>
+                    </View>
+                    <Text style={styles.toastText}>{toastMessage}</Text>
+                </View>
+                <View style={styles.statisticsContainer}>
+                    <Text style={styles.statTextLabel}>Reading Speed</Text>
+                    <View style={styles.speedMeterImage}></View>
+
+                    <Text style={styles.statTextLabel}>Attention</Text>
+                    <View style={styles.attentionMeterImage}></View>
+
+                    <Text style={styles.statTextLabel}>Engagement Score</Text>
+                    <View style={styles.engagementBar}>
+                        <View style={styles.engagementProgress}></View>
+                    </View>
+                    <Text style={styles.engagementPercentText}>85%</Text>
+                    
+                </View>
+            </View>
         </View>
-
-        <LinearGradient
-          className="mt-8 rounded-3xl p-6 shadow-lg"
-          colors={["#E0F7FA", "#FFFFFF"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View className="rounded-2xl border border-teal-200 bg-white p-5">
-            <View className="mb-5 flex-row items-center justify-between">
-              <Text className="text-lg font-montserrat-semibold text-slate-700">
-                Geometry Session
-              </Text>
-              <View className="rounded-full bg-teal-100 px-3 py-1">
-                <Text className="text-xs font-roboto text-teal-600">Visual Mode</Text>
-              </View>
+        <View style={styles.footerSection}>
+            <View style={styles.playButton}></View>
+            <View style={styles.prevButton}></View>
+            <View style={styles.nextButton}></View>
+            <View style={styles.playBackProgressBar}>
+                <View style={styles.playBackBar}></View>
             </View>
-            <View className="h-40 items-center justify-center rounded-2xl border border-dashed border-teal-300 bg-teal-50">
-              <MaterialCommunityIcons name="triangle-outline" size={72} color="#0EA5E9" />
-            </View>
-            <Text className="mt-4 text-center text-base font-roboto text-slate-600">
-              α/sin(α) = b·sin(b) = c - y
-            </Text>
-          </View>
-
-          <View className="mt-6 rounded-3xl bg-white p-6 shadow-sm">
-            <Text className="text-base font-montserrat-semibold text-slate-700">
-              Performance Indicators
-            </Text>
-            <View className="mt-4 flex-row justify-between">
-              <View className="items-center">
-                <View className="h-16 w-16 items-center justify-center rounded-full border-4 border-teal-400 bg-teal-50">
-                  <Text className="text-lg font-montserrat-semibold text-teal-600">125</Text>
-                  <Text className="text-[11px] font-roboto text-teal-500">WPM</Text>
-                </View>
-                <Text className="mt-2 text-xs font-roboto text-slate-500">Reading Speed</Text>
-              </View>
-              <View className="items-center">
-                <View className="h-16 w-16 items-center justify-center rounded-full border-4 border-emerald-400 bg-emerald-50">
-                  <Text className="text-lg font-montserrat-semibold text-emerald-600">High</Text>
-                </View>
-                <Text className="mt-2 text-xs font-roboto text-slate-500">Attention</Text>
-              </View>
-              <View className="items-center">
-                <View className="h-16 w-16 items-center justify-center rounded-full border-4 border-sky-400 bg-sky-50">
-                  <Text className="text-lg font-montserrat-semibold text-sky-600">85%</Text>
-                </View>
-                <Text className="mt-2 text-xs font-roboto text-slate-500">Engagement</Text>
-              </View>
-            </View>
-
-            <View className="mt-6">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-sm font-roboto text-slate-500">Playback</Text>
-                <Text className="text-sm font-roboto text-slate-700">1.0x</Text>
-              </View>
-              <View className="mt-3 h-1.5 rounded-full bg-slate-200">
-                <View className="h-1.5 w-2/3 rounded-full bg-teal-500" />
-              </View>
-              <View className="mt-4 flex-row items-center justify-between">
-                <TouchableOpacity className="h-12 w-12 items-center justify-center rounded-full bg-slate-200">
-                  <MaterialCommunityIcons name="play" size={22} color="#0F172A" />
-                </TouchableOpacity>
-                <TouchableOpacity className="h-12 w-12 items-center justify-center rounded-full bg-slate-200">
-                  <MaterialCommunityIcons name="skip-previous" size={22} color="#0F172A" />
-                </TouchableOpacity>
-                <TouchableOpacity className="h-12 w-12 items-center justify-center rounded-full bg-slate-200">
-                  <MaterialCommunityIcons name="skip-next" size={22} color="#0F172A" />
-                </TouchableOpacity>
-                <TouchableOpacity className="h-12 w-12 items-center justify-center rounded-full bg-teal-500">
-                  <MaterialCommunityIcons name="bookmark-outline" size={22} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
-
-        <TouchableOpacity
-          className="mt-8 rounded-full bg-teal-500 py-4 shadow-md shadow-teal-200"
-          activeOpacity={0.85}
-          onPress={() =>
-            router.push({
-              pathname: "/analytics",
-              params: { origin: "quiz", subject: params.subject ?? "math" },
-            })
-          }
-        >
-          <Text className="text-center text-base font-montserrat-semibold text-white">
-            Complete Quiz & View Analytics
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+            <Text style={styles.playBackSpeedText}>1.0x</Text>
+            <View style={styles.bookMarkImage}></View>
+        </View>
+      </View>
+    </View>
   );
 }
+const colors = {
+  tealPrimary: "#2CC8A3",
+  tealLight: "#7EEBD2",
+  tealDark: "#21afa3",
 
+  emerald: "#53DA7D",
+
+  grayLight: "#F4F5F7",
+  graySoft: "#DDE0E4",
+  grayMedium: "#7E8083",
+  grayDark: "#3F4347",
+
+  mintGlow: "#B7F8E5",
+
+  white: "#FFFFFF"
+};
+
+
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.grayLight,
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  background: {
+    backgroundColor: colors.white,
+    width: "90%",
+    height: "70%",
+    borderRadius: 20,
+    boxShadow: "0 4px 12px 0 rgba(0, 0, 0, .01)",
+  },
+
+  headerSection: {
+    backgroundColor: colors.white,
+    width: "100%",
+    height: "12%",
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    marginBottom: "2%",
+    boxShadow: "0 4px 12px 0 rgba(0, 0, 0, .05)",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+
+  activeHeaderButton: {
+    backgroundColor: colors.tealDark,
+    width: "27%",
+    height: "50%",
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    borderRadius: 25,
+  },
+
+  headerButton: {
+    backgroundColor: colors.graySoft,
+    width: "25%",
+    height: "50%",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 25,
+  },
+
+  activeCircle: {
+    width: "31%",
+    height: "78%",
+    marginRight: "5%",
+    backgroundColor: colors.white,
+    borderRadius: 25,
+  },
+
+  activeHeaderText: {
+    marginLeft: "20%",
+    color: colors.white,
+    flex: 1,
+  },
+
+  middleSection: {
+    display: "flex",
+    flexDirection: "row",
+    backgroundColor: colors.white,
+    paddingHorizontal: "2%",
+    width: "100%",
+    height: "76%",
+    zIndex: 2
+  },
+
+  videoContainer:{
+    backgroundColor: colors.graySoft,
+    width: "60%",
+    marginRight: "2%",
+    height: "100%",
+  },
+
+  rightSideContainer: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    width: "38%",
+    height: "105%",
+    marginTop: "-7.5%", 
+  },
+
+  toastModal: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+    width: "117%",
+    height: "20%",
+    paddingVertical: "3%",
+    paddingHorizontal: "4.5%",
+    borderRadius: 10,
+    boxShadow: "0 4px 12px 0 rgba(0, 0, 0, .1)",
+  },
+
+  toastImage: {
+    backgroundColor: colors.graySoft,
+    width: "45%",
+    height: "66%",
+    marginBottom: "2%"
+  },
+
+  toastText: {
+    color: colors.tealDark,
+    fontSize: 12,
+  },
+  
+  statisticsContainer: {
+    backgroundColor: colors.white,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    height: "73%",
+    marginBottom: "5%",
+    borderRadius: 10,
+    boxShadow: "0 4px 12px 0 rgba(0, 0, 0, .1)",
+  },
+
+  statTextLabel: {
+    color: colors.grayDark,
+    marginBottom: "10%",
+    fontSize: 13
+  },
+
+  speedMeterImage: {
+    backgroundColor: colors.graySoft,
+    width: "73%",
+    height: "25%",
+    borderRadius: 125,
+    marginBottom: "10%"
+  },
+
+  attentionMeterImage: {
+    backgroundColor: colors.graySoft,
+    width: "73%",
+    height: "25%",
+    borderRadius: 125,
+    marginBottom: "10%"
+  },
+
+  engagementBar: {
+    backgroundColor: colors.graySoft,
+    width: "85%",
+    height: "1.5%",
+    marginBottom: "10%",
+    borderRadius: 10
+  },
+  
+  engagementProgress: {
+    backgroundColor: colors.emerald,
+    width: "85%",
+    height: "100%",
+    borderRadius: 10
+  },
+
+  engagementPercentText: {
+    color: colors.grayDark,
+    fontSize: 13
+  },
+
+  footerSection: {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    boxShadow: "0 -4px 12px 0 rgba(0, 0, 0, .05)",
+    width: "100%",
+    height: "12%",
+    marginTop: "2%",
+    paddingHorizontal: "3%",
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+
+  playButton:{
+    backgroundColor: colors.graySoft,
+    width: "10%",
+    height: "45%",
+    borderRadius: 100
+  },
+
+  prevButton: {
+    backgroundColor: colors.graySoft,
+    width: "8%",
+    height: "40%",
+    borderRadius: 100
+  },
+
+  nextButton: {
+    backgroundColor: colors.graySoft,
+    width: "8%",
+    height: "40%",
+    borderRadius: 100
+  },
+
+  playBackProgressBar:{
+    backgroundColor: colors.graySoft,
+    width: "38%",
+    height: "5%",
+    borderRadius: 10,
+    marginHorizontal: "2%"
+  },
+
+  playBackBar:{
+    backgroundColor: colors.emerald,
+    width: "40%",
+    height: "100%",
+    borderRadius: 10
+  },
+
+  playBackSpeedText: {
+    color: colors.grayDark,
+    fontSize: 13
+  },
+
+   bookMarkImage: {
+    backgroundColor: colors.graySoft,
+    width: "8%",
+    height: "50%",
+    borderRadius: 100,
+    marginLeft: "3%"
+  },
+});
