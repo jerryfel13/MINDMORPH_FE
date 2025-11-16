@@ -1,11 +1,12 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Svg, Polyline } from "react-native-svg";
+import { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Polyline, Svg } from "react-native-svg";
 
-const LINE_POINTS = "0,60 30,55 45,40 65,52 85,35 105,48 125,30 145,38 165,24";
+
 
 const SUBJECT_PERFORMANCE = [
   { label: "Mathematics", percent: 78, color: "#38BDF8" },
@@ -13,12 +14,107 @@ const SUBJECT_PERFORMANCE = [
   { label: "Language", percent: 88, color: "#F97316" },
 ];
 
+type ScorePair = [number, number];
+
+interface QuizScores {
+  visual: ScorePair[];
+  audio: ScorePair[];
+  text: ScorePair[];
+}
+
+type Points = string;
+
+interface LinePoints {
+  visual: Points;
+  audio: Points;
+  text: Points;
+}
+
+function toPercentages(arr: ScorePair[]): number[] {
+  return arr.map(([score, length]) =>
+    length === 0 ? 0 : (score / length) * 100
+  );
+}
+
+function toLinePoints(percentages: number[]): string {
+  const count = percentages.length;
+  if (count === 0) return "";
+
+  return percentages
+    .map((percent, index) => {
+      const x = (index / (count - 1)) * 250;
+      const y = 100 - percent;
+      return `${x.toFixed(0)},${y.toFixed(0)}`;
+    })
+    .join(" ");
+}
+
+
 export default function AnalyticsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ origin?: string; subject?: string }>();
   const subjectLabel = params.subject
     ? params.subject.charAt(0).toUpperCase() + params.subject.slice(1)
     : undefined;
+
+   const [quizScores, setQuizScores] = useState<QuizScores>({
+    visual: [
+      [7, 10],
+      [3, 20],
+      [12, 20],
+      [49, 50],
+      [9, 10],
+      [45, 50],
+      [18, 20],
+      [5, 10],
+      [48, 50],
+      [26, 50]
+    ],
+    audio: [
+      [4, 10],
+      [15, 20],
+      [8, 20],
+      [33, 50],
+      [6, 10],
+      [21, 50],
+      [12, 20],
+      [3, 10],
+      [47, 50],
+      [28, 50]
+    ],
+    text: [
+      [9, 10],
+      [18, 20],
+      [11, 20],
+      [45, 50],
+      [7, 10],
+      [30, 50],
+      [13, 20],
+      [2, 10],
+      [50, 50],
+      [22, 50]
+    ]
+  });
+
+  const [linePoints, setLinePoints] = useState<LinePoints>({
+    visual: "",
+    audio: "",
+    text: ""
+  });
+
+  useEffect(() => {
+    const percentages = {
+      visual: toPercentages(quizScores.visual),
+      audio: toPercentages(quizScores.audio),
+      text: toPercentages(quizScores.text)
+    };
+
+    setLinePoints({
+      visual: toLinePoints(percentages.visual),
+      audio: toLinePoints(percentages.audio),
+      text: toLinePoints(percentages.text)
+    });
+  }, [quizScores]); 
 
   return (
     <LinearGradient
@@ -57,7 +153,7 @@ export default function AnalyticsScreen() {
             <View style={styles.chartWrapper}>
               <Svg height="160" width="100%">
                 <Polyline
-                  points={LINE_POINTS}
+                  points={linePoints.visual}
                   fill="none"
                   stroke="#38BDF8"
                   strokeWidth="3"
@@ -65,7 +161,7 @@ export default function AnalyticsScreen() {
                   strokeLinejoin="round"
                 />
                 <Polyline
-                  points="0,90 30,75 60,95 90,55 120,65 150,45"
+                  points={linePoints.audio}
                   fill="none"
                   stroke="#F97316"
                   strokeWidth="3"
@@ -73,7 +169,7 @@ export default function AnalyticsScreen() {
                   strokeLinejoin="round"
                 />
                 <Polyline
-                  points="0,110 30,85 60,70 90,95 120,80 150,60"
+                  points={linePoints.text}
                   fill="none"
                   stroke="#A855F7"
                   strokeWidth="3"
