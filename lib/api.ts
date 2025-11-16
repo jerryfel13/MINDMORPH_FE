@@ -6,7 +6,7 @@
 // You can find it by running: ipconfig (Windows) or ifconfig (Mac/Linux)
 const LOCAL_IP = '192.168.100.66';
 
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
   // Allow environment variable override
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;

@@ -1,7 +1,8 @@
+import { login as loginAPI } from "@/lib/api";
+import { storeToken, storeUserData } from "@/lib/storage";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -13,10 +14,6 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { login as loginAPI } from "@/lib/api";
-import { storeToken, storeUserData } from "@/lib/storage";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -140,14 +137,6 @@ export default function LoginScreen() {
               </View>
             </LinearGradient>
           </View>
-          
-          {formError ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{formErrorMessage[0]}</Text>
-              <Text style={styles.errorText}>{formErrorMessage[1]}</Text>
-            </View>
-          ) : null}
-
           <LinearGradient
             colors={["rgba(255, 255, 255, 0.97)", "rgba(255, 255, 255, 0.85)"]}
             start={{ x: 0, y: 0 }}

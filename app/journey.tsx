@@ -1,12 +1,73 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SUBJECTS } from "@/constants/subjects";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Router, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useSubjectProgress } from "../hooks/use-subject-progress";
+import { getUserData } from "../lib/storage";
+
+// Subject Progress Card Component
+function SubjectProgressCard({ subject, router }: { subject: any; router: Router }) {
+  const { progress, loading } = useSubjectProgress(subject.id);
+
+  return (
+    <LinearGradient
+      colors={subject.colors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.card}
+    >
+      <View style={styles.cardIconWrapper}>
+        <MaterialCommunityIcons name={subject.icon as never} size={28} color="#FFFFFF" />
+      </View>
+      <Text style={styles.cardTitle}>{subject.title}</Text>
+      <View style={styles.progressWrapper}>
+        <View style={styles.progressOuter}>
+          <View style={styles.progressInner}>
+            {loading ? (
+              <ActivityIndicator size="small" color="#0F172A" />
+            ) : (
+              <Text style={styles.progressValue}>{progress}%</Text>
+            )}
+          </View>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={styles.cardButton}
+        activeOpacity={0.85}
+        onPress={() =>
+          router.push({ pathname: "/subject-overview", params: { subject: subject.id } })
+        }
+      >
+        <Text style={styles.cardButtonText}>Continue</Text>
+      </TouchableOpacity>
+    </LinearGradient>
+  );
+}
 
 export default function JourneyScreen() {
   const router = useRouter();
+  const [firstName, setFirstName] = useState<string>("");
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const userData = await getUserData();
+        if (userData?.fullName) {
+          // Extract first name from full name
+          const nameParts = userData.fullName.trim().split(" ");
+          const first = nameParts[0] || "";
+          setFirstName(first);
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      }
+    };
+
+    loadUserData();
+  }, []);
 
   return (
     <LinearGradient
@@ -18,7 +79,9 @@ export default function JourneyScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.headerRow}>
           <View style={styles.headerInfo}>
-            <Text style={styles.greeting}>Hello, Alex</Text>
+            <Text style={styles.greeting}>
+              {firstName ? `Hello, ${firstName}` : "Hello"}
+            </Text>
             <Text style={styles.title}>Your Learning Journey</Text>
           </View>
           <View style={styles.headerActions}>
@@ -36,34 +99,11 @@ export default function JourneyScreen() {
           contentContainerStyle={styles.cardsContainer}
         >
           {SUBJECTS.map((subject) => (
-            <LinearGradient
+            <SubjectProgressCard
               key={subject.id}
-              colors={subject.colors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.card}
-            >
-              <View style={styles.cardIconWrapper}>
-                <MaterialCommunityIcons name={subject.icon as never} size={28} color="#FFFFFF" />
-              </View>
-              <Text style={styles.cardTitle}>{subject.title}</Text>
-              <View style={styles.progressWrapper}>
-                <View style={styles.progressOuter}>
-                  <View style={styles.progressInner}>
-                    <Text style={styles.progressValue}>{subject.progress}%</Text>
-                  </View>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.cardButton}
-                activeOpacity={0.85}
-                onPress={() =>
-                  router.push({ pathname: "/subject-overview", params: { subject: subject.id } })
-                }
-              >
-                <Text style={styles.cardButtonText}>Continue</Text>
-              </TouchableOpacity>
-            </LinearGradient>
+              subject={subject}
+              router={router}
+            />
           ))}
         </ScrollView>
       </SafeAreaView>

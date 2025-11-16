@@ -1,10 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEngagement } from "../hooks/use-engagement";
 import { useMLRecommendation } from "../hooks/use-ml-recommendation";
+import { hasCompletedAllLearningTypesFromDB } from "../lib/learning-type-service";
 
 const MODES = [
   { id: "visual", label: "Visual", icon: "eye" },
@@ -55,6 +57,42 @@ export default function ModeSwitchScreen() {
   
   // Get engagement analysis
   const { engagement, loading: engagementLoading } = useEngagement(7);
+
+  // Gate: require all learning types before continuing to content for this subject
+  const [allTypesCompleted, setAllTypesCompleted] = useState(false);
+  const [checkingCompletion, setCheckingCompletion] = useState(true);
+
+  // Get progress from ML recommendation modeStats (from activity_logs database)
+  const getModeProgress = (modeId: string) => {
+    if (!recommendation?.modeStats) return null;
+    return recommendation.modeStats[modeId as 'visual' | 'audio' | 'text'];
+  };
+
+  // Determine completed types from modeStats (has sessions = completed)
+  const completedTypes = MODES.filter(mode => {
+    const stats = getModeProgress(mode.id);
+    return stats && stats.totalSessions > 0;
+  }).map(mode => mode.id);
+
+  useEffect(() => {
+    const subjectKey = (params.subject || "math").toString();
+    setCheckingCompletion(true);
+    
+    // Check if all types are completed from database (activity_logs)
+    hasCompletedAllLearningTypesFromDB(subjectKey)
+      .then((completed) => {
+        setAllTypesCompleted(completed);
+        console.log(`[Mode Switch] Learning types completion for ${subjectKey}:`, completed);
+        if (completed) {
+          console.log('✅ All learning types completed - hiding Test Your Learning Type button');
+        }
+      })
+      .catch((err) => {
+        console.error("Error checking learning type completion from database:", err);
+        setAllTypesCompleted(false);
+      })
+      .finally(() => setCheckingCompletion(false));
+  }, [params.subject]);
   
   // Use ML recommendation if available, otherwise fall back to params or default
   const mlRecommendedMode = recommendation?.recommendedMode || null;
@@ -168,17 +206,18 @@ export default function ModeSwitchScreen() {
       marginTop: isSmall ? 12 : 16,
     },
     metricsColumn: {
-      marginLeft: isCompact ? 0 : isTablet ? 24 : 18,
-      marginTop: isCompact ? 18 : 0,
-      width: (isCompact ? "100%" : isTablet ? 160 : 128) as ViewStyle["width"],
-      flexDirection: (isCompact ? "row" : undefined) as ViewStyle["flexDirection"],
-      flexWrap: (isCompact ? "wrap" : undefined) as ViewStyle["flexWrap"],
+      marginLeft: 0,
+      marginTop: isSmall ? 20 : 28,
+      width: "100%" as ViewStyle["width"],
+      flexDirection: "row" as ViewStyle["flexDirection"],
+      flexWrap: "wrap" as ViewStyle["flexWrap"],
+      justifyContent: "space-between" as ViewStyle["justifyContent"],
     },
     metricCard: {
       padding: isSmall ? 12 : isTablet ? 18 : 16,
       borderRadius: isSmall ? 20 : 24,
       marginBottom: isSmall ? 10 : 14,
-      width: (isCompact ? "48%" : undefined) as ViewStyle["width"],
+      width: (isSmall ? "100%" : isCompact ? "48%" : "31%") as ViewStyle["width"],
     },
     metricIcon: isSmall ? 18 : isTablet ? 22 : 20,
     metricLabel: {
@@ -262,7 +301,7 @@ export default function ModeSwitchScreen() {
           contentContainerStyle={[
             styles.scrollContent, 
             isCompact && styles.scrollContentCompact,
-            { paddingBottom: isSmall ? 32 : 48 }
+            { paddingBottom: isSmall ? 100 : 120 } // Extra padding for sticky button
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -294,6 +333,12 @@ export default function ModeSwitchScreen() {
             <View style={[styles.modeRow, dynamicStyles.modeRow, isCompact && styles.modeRowCompact]}>
             {MODES.map((mode) => {
               const isActive = mode.id === activeMode;
+              const modeStats = getModeProgress(mode.id);
+              const isCompleted = modeStats && modeStats.totalSessions > 0;
+              const avgScore = modeStats && modeStats.totalSessions > 0 
+                ? Math.round(modeStats.totalScore / modeStats.totalSessions) 
+                : null;
+              
               return (
                   <TouchableOpacity
                   key={mode.id}
@@ -301,6 +346,7 @@ export default function ModeSwitchScreen() {
                       styles.modeChip, 
                       dynamicStyles.modeChip,
                       isActive && styles.modeChipActive, 
+                      isCompleted && !isActive && styles.modeChipCompleted,
                       isCompact && styles.modeChipCompact
                     ]}
                     onPress={() => {
@@ -314,23 +360,100 @@ export default function ModeSwitchScreen() {
                     }}
                     activeOpacity={0.7}
                 >
-                  <MaterialCommunityIcons
-                    name={mode.icon as never}
-                      size={dynamicStyles.modeIcon}
-                    color={isActive ? "#FFFFFF" : "#64748B"}
-                  />
-                    <Text style={[
-                      styles.modeChipLabel, 
-                      dynamicStyles.modeChipLabel,
-                      isActive && styles.modeChipLabelActive
-                    ]}>
-                    {mode.label}
-                  </Text>
+                  <View style={styles.modeChipContent}>
+                    <MaterialCommunityIcons
+                      name={mode.icon as never}
+                        size={dynamicStyles.modeIcon}
+                      color={isActive ? "#FFFFFF" : "#64748B"}
+                    />
+                      <View style={styles.modeChipTextContainer}>
+                        <Text 
+                          style={[
+                            styles.modeChipLabel, 
+                            dynamicStyles.modeChipLabel,
+                            isActive && styles.modeChipLabelActive
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {mode.label}
+                        </Text>
+                        {modeStats && modeStats.totalSessions > 0 && (
+                          <Text 
+                            style={[
+                              styles.modeChipProgress,
+                              isActive && styles.modeChipProgressActive,
+                              isCompact && styles.modeChipProgressCompact
+                            ]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
+                            {modeStats.totalSessions} session{modeStats.totalSessions !== 1 ? 's' : ''} • {avgScore}% avg
+                          </Text>
+                        )}
+                      </View>
+                  </View>
+                  {isCompleted && (
+                    <View style={styles.completionBadge}>
+                      <MaterialCommunityIcons
+                        name="check-circle"
+                        size={isSmall ? 16 : 18}
+                        color={isActive ? "#FFFFFF" : "#10B981"}
+                      />
+                    </View>
+                  )}
                   </TouchableOpacity>
               );
             })}
           </View>
+          
+          {/* Progress indicator showing completion status from database */}
+          {recommendation?.modeStats && (
+            <View style={styles.progressIndicator}>
+              <Text 
+                style={styles.progressText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                Progress: {completedTypes.length} of {MODES.length} learning types completed
+              </Text>
+              <View style={styles.progressBarContainer}>
+                <View 
+                  style={[
+                    styles.progressBarFill, 
+                    { width: `${(completedTypes.length / MODES.length) * 100}%` }
+                  ]} 
+                />
+              </View>
+              {/* Show detailed stats for each mode */}
+              <View style={styles.modeStatsContainer}>
+                {MODES.map((mode) => {
+                  const stats = getModeProgress(mode.id);
+                  if (!stats || stats.totalSessions === 0) return null;
+                  const avgScore = Math.round(stats.totalScore / stats.totalSessions);
+                  return (
+                    <View key={mode.id} style={styles.modeStatItem}>
+                      <MaterialCommunityIcons
+                        name={mode.icon as never}
+                        size={16}
+                        color="#64748B"
+                      />
+                      <Text 
+                        style={styles.modeStatText}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {mode.label}: {stats.totalSessions} session{stats.totalSessions !== 1 ? 's' : ''}, {avgScore}% avg
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
+          {/* Only show Test Your Learning Type button if user hasn't completed all learning types */}
+          {!allTypesCompleted && !checkingCompletion && (
             <TouchableOpacity
               style={styles.testButton}
               onPress={() => {
@@ -346,46 +469,13 @@ export default function ModeSwitchScreen() {
               <MaterialCommunityIcons name="test-tube" size={20} color="#0EA5E9" />
               <Text style={styles.testButtonText}>Test Your Learning Type</Text>
             </TouchableOpacity>
+          )}
 
           <View style={[
-            styles.sessionRow, 
-            dynamicStyles.sessionRow
+            styles.metricsColumn, 
+            dynamicStyles.metricsColumn,
+            isCompact && styles.metricsColumnCompact
           ]}>
-            <View style={[
-              styles.moduleCard, 
-              dynamicStyles.moduleCard,
-              isCompact && styles.moduleCardCompact
-            ]}>
-              <View style={[
-                styles.moduleHeader,
-                isSmall && { flexDirection: "column", alignItems: "flex-start" }
-              ]}>
-                <Text style={[styles.moduleTitle, dynamicStyles.moduleTitle]}>
-                  Visual Geometry
-                </Text>
-                <View style={[styles.moduleBadge, dynamicStyles.moduleBadge, isSmall && { marginTop: 8 }]}>
-                  <Text style={[styles.moduleBadgeText, dynamicStyles.moduleBadgeText]}>
-                    {mlLoading ? "Analyzing..." : `Adapting to ${activeMode.charAt(0).toUpperCase() + activeMode.slice(1)}`}
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.diagramPlaceholder, dynamicStyles.diagramPlaceholder]}>
-                <MaterialCommunityIcons 
-                  name="triangle-outline" 
-                  size={dynamicStyles.diagramIcon} 
-                  color="#0EA5E9" 
-                />
-              </View>
-              <Text style={[styles.diagramFormula, dynamicStyles.diagramFormula]}>
-                α/sin(α) = b·sin(b) = c − y
-              </Text>
-            </View>
-
-            <View style={[
-              styles.metricsColumn, 
-              dynamicStyles.metricsColumn,
-              isCompact && styles.metricsColumnCompact
-            ]}>
               {realMetrics.map((metric) => (
                 <View
                   key={metric.label}
@@ -414,69 +504,6 @@ export default function ModeSwitchScreen() {
                   </Text>
                 </View>
               ))}
-            </View>
-          </View>
-
-          <View style={[styles.playerCard, dynamicStyles.playerCard]}>
-            <View style={[
-              styles.playerControls,
-              isSmall && { flexWrap: "wrap", justifyContent: "center" }
-            ]}>
-              <TouchableOpacity style={[
-                styles.playerButton, 
-                styles.playerButtonPrimary,
-                dynamicStyles.playerButton
-              ]}>
-                <MaterialCommunityIcons 
-                  name="play" 
-                  size={dynamicStyles.playerIcon} 
-                  color="#FFFFFF" 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity style={[
-                styles.playerButton,
-                dynamicStyles.playerButton
-              ]}>
-                <MaterialCommunityIcons 
-                  name="skip-backward" 
-                  size={dynamicStyles.playerIconSmall} 
-                  color="#0F172A" 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity style={[
-                styles.playerButton,
-                dynamicStyles.playerButton
-              ]}>
-                <MaterialCommunityIcons 
-                  name="skip-forward" 
-                  size={dynamicStyles.playerIconSmall} 
-                  color="#0F172A" 
-                />
-              </TouchableOpacity>
-              <View style={styles.playerSpeed}>
-                <MaterialCommunityIcons 
-                  name="clock-outline" 
-                  size={dynamicStyles.playerSpeedIcon} 
-                  color="#0F172A" 
-                />
-                <Text style={[styles.playerSpeedLabel, dynamicStyles.playerSpeedLabel]}>
-                  1.0x
-                </Text>
-              </View>
-              <TouchableOpacity style={[
-                styles.playerButton,
-                dynamicStyles.playerButton
-              ]}>
-                <MaterialCommunityIcons 
-                  name="bookmark-outline" 
-                  size={dynamicStyles.playerIconSmall} 
-                  color="#0F172A" 
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.progressTrack, dynamicStyles.progressTrack]}>
-              <View style={styles.progressFill} />
-            </View>
           </View>
 
           <View style={[styles.confidenceCard, dynamicStyles.confidenceCard]}>
@@ -485,27 +512,59 @@ export default function ModeSwitchScreen() {
                 Adaptation Confidence
               </Text>
               <Text style={[styles.confidenceValue, dynamicStyles.confidenceValue]}>
-                78%
+                {mlLoading || engagementLoading
+                  ? "..."
+                  : recommendation?.confidence !== undefined
+                    ? `${Math.round(recommendation.confidence * 100)}%`
+                    : engagement?.engagementScore !== undefined
+                      ? `${Math.round(engagement.engagementScore)}%`
+                      : "N/A"}
               </Text>
             </View>
             <View style={[styles.confidenceMeter, dynamicStyles.confidenceMeter]}>
-              <View style={styles.confidenceMeterFill} />
+              <View 
+                style={[
+                  styles.confidenceMeterFill,
+                  {
+                    height: mlLoading || engagementLoading
+                      ? 0
+                      : recommendation?.confidence !== undefined
+                        ? `${Math.round(recommendation.confidence * 100)}%`
+                        : engagement?.engagementScore !== undefined
+                          ? `${Math.round(engagement.engagementScore)}%`
+                          : "0%"
+                  }
+                ]} 
+              />
             </View>
           </View>
+        </View>
+        </ScrollView>
 
+        {/* Sticky View Topics Button */}
+        <View style={styles.stickyButtonContainer}>
           <TouchableOpacity
             activeOpacity={0.85}
-            style={[styles.primaryButton, dynamicStyles.primaryButton]}
-            onPress={() =>
-              router.push({ pathname: "/module", params: { subject: params.subject ?? "math" } })
-            }
+            style={[
+              styles.primaryButton,
+              dynamicStyles.primaryButton,
+              (!allTypesCompleted || checkingCompletion) && { opacity: 0.6 },
+            ]}
+            disabled={!allTypesCompleted || checkingCompletion}
+            onPress={() => {
+              if (!allTypesCompleted) return;
+              router.push({ pathname: "/topics", params: { subject: params.subject ?? "math" } });
+            }}
           >
             <Text style={[styles.primaryButtonLabel, dynamicStyles.primaryButtonLabel]}>
-              Continue to Updated Content
+              {checkingCompletion
+                ? "Checking learning type progress..."
+                : allTypesCompleted
+                  ? "View Topics"
+                  : "Complete All Learning Types to Continue"}
             </Text>
           </TouchableOpacity>
         </View>
-        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -614,15 +673,21 @@ const styles = StyleSheet.create({
   },
   modeChip: {
     flex: 1,
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
     paddingVertical: 10,
+    paddingHorizontal: 8,
     marginHorizontal: 4,
+    position: "relative",
+    minHeight: 60,
+    maxWidth: "100%",
   },
   modeChipCompact: {
     minWidth: "28%",
+    maxWidth: "32%",
+    paddingHorizontal: 4,
   },
   modeChipActive: {
     backgroundColor: "#0EA5E9",
@@ -635,9 +700,102 @@ const styles = StyleSheet.create({
   modeChipLabel: {
     fontFamily: "Montserrat_500Medium",
     color: "#64748B",
+    textAlign: "center",
+    maxWidth: "100%",
   },
   modeChipLabelActive: {
     color: "#FFFFFF",
+  },
+  modeChipContent: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    gap: 4,
+  },
+  modeChipTextContainer: {
+    alignItems: "center",
+    width: "100%",
+    maxWidth: "100%",
+    paddingHorizontal: 4,
+  },
+  modeChipProgress: {
+    fontSize: 9,
+    fontFamily: "Roboto_400Regular",
+    color: "#94A3B8",
+    marginTop: 2,
+    textAlign: "center",
+    maxWidth: "100%",
+  },
+  modeChipProgressCompact: {
+    fontSize: 8,
+  },
+  modeChipProgressActive: {
+    color: "#BAE6FD",
+  },
+  modeChipCompleted: {
+    backgroundColor: "#D1FAE5",
+    borderWidth: 1,
+    borderColor: "#10B981",
+  },
+  completionBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  progressIndicator: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    width: "100%",
+    maxWidth: "100%",
+  },
+  progressText: {
+    fontSize: 13,
+    fontFamily: "Roboto_500Medium",
+    color: "#64748B",
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  progressBarContainer: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E2E8F0",
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#10B981",
+    borderRadius: 3,
+  },
+  modeStatsContainer: {
+    marginTop: 12,
+    gap: 8,
+  },
+  modeStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  modeStatText: {
+    fontSize: 12,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+    flex: 1,
+    flexShrink: 1,
   },
   testButton: {
     marginTop: 20,
@@ -832,11 +990,13 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   confidenceMeterFill: {
-    flex: 1,
+    width: "100%",
     backgroundColor: "#22C55E",
+    borderRadius: 999,
+    position: "absolute",
+    bottom: 0,
   },
   primaryButton: {
-    marginTop: 24,
     borderRadius: 999,
     backgroundColor: "#10B981",
     paddingVertical: 16,
@@ -851,6 +1011,23 @@ const styles = StyleSheet.create({
   primaryButtonLabel: {
     fontFamily: "Montserrat_600SemiBold",
     color: "#FFFFFF",
+  },
+  stickyButtonContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    paddingTop: 12,
+    backgroundColor: "#EEF9FF",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 8,
   },
 });
 

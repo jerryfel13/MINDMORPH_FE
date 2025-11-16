@@ -30,6 +30,7 @@ async function getAuthHeaders() {
  */
 export interface MLRecommendation {
   recommendedMode: 'visual' | 'audio' | 'text';
+  bestPerformingMode?: 'visual' | 'audio' | 'text'; // Mode with highest average quiz score (for topic generation)
   confidence: number;
   reasoning: string;
   modeStats?: {

@@ -1,13 +1,6 @@
 // AI Service - AI Content Generation API calls
 import { getToken } from './storage';
-
-const getApiBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  const LOCAL_IP = '192.168.100.66'; // Update this to match your server IP
-  return `http://${LOCAL_IP}:4000`;
-};
+import { getApiBaseUrl } from './api';
 
 const API_URL = getApiBaseUrl();
 
@@ -405,6 +398,64 @@ export async function explainAnswer(
     return data.explanation;
   } catch (error: any) {
     console.error('Error generating explanation:', error);
+    throw error;
+  }
+}
+
+/**
+ * Topic interface for generated topics
+ */
+export interface GeneratedTopic {
+  id: string;
+  title: string;
+  description?: string;
+  learningType: 'visual' | 'audio' | 'text';
+  difficulty?: 'easy' | 'medium' | 'hard';
+  createdAt: string;
+}
+
+/**
+ * Generate topics for a subject based on the user's best learning type
+ */
+export async function generateTopics(
+  subject: string,
+  learningType: 'visual' | 'audio' | 'text',
+  numTopics: number = 10
+): Promise<GeneratedTopic[]> {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/api/ai/generate-topics`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        subject,
+        learningType,
+        numTopics,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || error.message || `Failed to generate topics: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Ensure topics have proper structure
+    if (Array.isArray(data.topics)) {
+      return data.topics.map((topic: any, index: number) => ({
+        id: topic.id || `topic-${Date.now()}-${index}`,
+        title: topic.title || topic.name || `Topic ${index + 1}`,
+        description: topic.description || topic.summary,
+        learningType: topic.learningType || learningType,
+        difficulty: topic.difficulty || 'medium',
+        createdAt: topic.createdAt || new Date().toISOString(),
+      }));
+    }
+    
+    throw new Error('Invalid response format: topics array not found');
+  } catch (error: any) {
+    console.error('Error generating topics:', error);
     throw error;
   }
 }

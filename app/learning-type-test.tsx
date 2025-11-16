@@ -9,8 +9,9 @@ import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, To
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAIContent } from "../hooks/use-ai-content";
 import { generateQuiz } from "../lib/ai-service";
+import { getApiBaseUrl } from "../lib/api";
 import { getRecommendedMode, MLRecommendation } from "../lib/ml-service";
-import { getToken } from "../lib/storage";
+import { getToken, markLearningTypeCompleted } from "../lib/storage";
 
 // Import expo-audio and expo-video (replacing deprecated expo-av)
 let Audio: any = null;
@@ -101,21 +102,22 @@ export default function LearningTypeTestScreen() {
 
   // Helper function to get full audio URL
   const getAudioUrl = (audioPath: string): string => {
-    if (!audioPath) return '';
-    if (audioPath.startsWith('http')) return audioPath;
-    const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://192.168.100.66:4000`;
-    return `${API_URL}${audioPath}`;
+    if (!audioPath) return "";
+    if (audioPath.startsWith("http")) return audioPath;
+    const API_URL = getApiBaseUrl();
+    // Ensure leading slash so `${API_URL}/path` is correct
+    const normalizedPath = audioPath.startsWith("/") ? audioPath : `/${audioPath}`;
+    return `${API_URL}${normalizedPath}`;
   };
 
   // Helper function to get full video URL
   const getVideoUrl = (videoPath: string): string => {
-    if (!videoPath) return '';
-    if (videoPath.startsWith('http')) return videoPath;
-    const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://192.168.100.66:4000`;
-    // Ensure videoPath starts with /
-    const normalizedPath = videoPath.startsWith('/') ? videoPath : `/${videoPath}`;
+    if (!videoPath) return "";
+    if (videoPath.startsWith("http")) return videoPath;
+    const API_URL = getApiBaseUrl();
+    const normalizedPath = videoPath.startsWith("/") ? videoPath : `/${videoPath}`;
     const fullUrl = `${API_URL}${normalizedPath}`;
-    console.log('🎥 Constructed video URL:', fullUrl);
+    console.log("🎥 Constructed video URL:", fullUrl);
     return fullUrl;
   };
 
@@ -181,9 +183,13 @@ export default function LearningTypeTestScreen() {
     const isPlaying = playingAudio === fullUrl;
 
     const handlePlayPause = async () => {
-      // Fallback: If Audio is not available, open URL in browser
+      // Fallback: If Audio is not available, open URL in browser (only if valid http/https)
       if (!Audio) {
         try {
+          if (!fullUrl.startsWith("http")) {
+            console.error("Invalid audio URL (no http/https):", fullUrl);
+            return;
+          }
           const canOpen = await Linking.canOpenURL(fullUrl);
           if (canOpen) {
             await Linking.openURL(fullUrl);
@@ -461,7 +467,7 @@ export default function LearningTypeTestScreen() {
         alert("Authentication error: Please log in again");
         // Still proceed with quiz generation even if save fails
       } else {
-        const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.100.66:4000";
+        const API_URL = getApiBaseUrl();
         
         // Validate subject before creating payload
         if (!subject || subject.trim() === '') {
@@ -589,12 +595,23 @@ export default function LearningTypeTestScreen() {
     // Determine if user excels with this learning type
     const excels = score >= 80; // 80% or higher = excels
     
-    setQuizResults({
+    const resultsPayload = {
       score,
       excels,
       results,
       learningType: selectedType,
-    });
+    };
+    
+    setQuizResults(resultsPayload);
+    
+    // Mark this learning type as completed for the subject (for gating topics later)
+    if (selectedType) {
+      try {
+        await markLearningTypeCompleted(subject, selectedType as 'visual' | 'audio' | 'text');
+      } catch (e) {
+        console.error("Failed to mark learning type completed:", e);
+      }
+    }
     
     setCurrentStep("results");
     
@@ -624,7 +641,7 @@ export default function LearningTypeTestScreen() {
         return;
       }
       
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.100.66:4000";
+      const API_URL = getApiBaseUrl();
       
       // Prepare detailed quiz progress data
       const quizProgressData = {
@@ -902,12 +919,12 @@ export default function LearningTypeTestScreen() {
                 {selectedType === "visual" && content.visualElements && (
                   <View>
                     {content.visualElements.map((element: any, index) => {
-                      const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.100.66:4000";
-                      const imageUrl = element.imageUrl 
-                        ? (element.imageUrl.startsWith('http') 
-                            ? element.imageUrl 
-                            : `${API_URL}${element.imageUrl}`)
-                        : null;
+                    const API_URL = getApiBaseUrl();
+                    const imageUrl = element.imageUrl 
+                      ? (element.imageUrl.startsWith('http') 
+                          ? element.imageUrl 
+                          : `${API_URL}${element.imageUrl.startsWith('/') ? element.imageUrl : `/${element.imageUrl}`}`)
+                      : null;
                       
                       return (
                         <View key={index} style={styles.contentSection}>
