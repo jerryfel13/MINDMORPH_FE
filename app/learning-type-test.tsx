@@ -80,8 +80,8 @@ export default function LearningTypeTestScreen() {
   
   const { content, loading: contentLoading, error: contentError, generateForMode } = useAIContent();
   
-  const subject = params.subject || "math";
-  const topic = params.topic || "Algebra Basics";
+  const subject = params.subject;
+  const topic = params.topic;
 
   // Helper function to safely render content (handles objects, arrays, strings)
   const renderSafeContent = (value: any): string => {

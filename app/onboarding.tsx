@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, TouchableOpacity, View, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { getUserSubjects } from "@/lib/subjects-service";
 
 const { width } = Dimensions.get("window");
 
@@ -37,16 +38,35 @@ export default function OnboardingScreen() {
   const isLast = step === SLIDES.length - 1;
   const current = SLIDES[step];
 
+  // Check if user already has subjects selected
+  useEffect(() => {
+    const checkExistingSubjects = async () => {
+      try {
+        const userSubjectsData = await getUserSubjects();
+        if (userSubjectsData.success && userSubjectsData.subjects && userSubjectsData.subjects.length > 0) {
+          // User already has subjects, skip to journey
+          console.log(`User already has ${userSubjectsData.subjects.length} subjects, skipping to journey`);
+          router.replace("/journey");
+        }
+      } catch (err) {
+        // No existing subjects or error, continue with onboarding
+        console.log("No existing subjects, continuing with onboarding");
+      }
+    };
+
+    checkExistingSubjects();
+  }, [router]);
+
   const handleNext = () => {
     if (isLast) {
-      router.push("/preference");
+      router.push("/subject-selection");
     } else {
       setStep((prev) => prev + 1);
     }
   };
 
   const handleSkip = () => {
-    router.push("/preference");
+    router.push("/subject-selection");
   };
 
   return (

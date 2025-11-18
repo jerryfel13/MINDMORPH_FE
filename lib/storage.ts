@@ -79,6 +79,12 @@ export async function markLearningTypeCompleted(
   learningType: 'visual' | 'audio' | 'text'
 ): Promise<void> {
   try {
+    // Safety check: ensure subject is defined
+    if (!subject || typeof subject !== 'string') {
+      console.warn('markLearningTypeCompleted: subject is undefined or not a string');
+      return;
+    }
+    
     const key = `${LEARNING_TYPES_PREFIX}${subject.toLowerCase().trim()}`;
     const raw = await AsyncStorage.getItem(key);
     const existing: string[] = raw ? JSON.parse(raw) : [];
@@ -96,6 +102,12 @@ export async function markLearningTypeCompleted(
  */
 export async function getCompletedLearningTypes(subject: string): Promise<string[]> {
   try {
+    // Safety check: ensure subject is defined
+    if (!subject || typeof subject !== 'string') {
+      console.warn('getCompletedLearningTypes: subject is undefined or not a string');
+      return [];
+    }
+    
     const key = `${LEARNING_TYPES_PREFIX}${subject.toLowerCase().trim()}`;
     const raw = await AsyncStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
@@ -135,6 +147,11 @@ export async function storeTopics(
   learningType: 'visual' | 'audio' | 'text'
 ): Promise<void> {
   try {
+    // Safety check: ensure subject is defined
+    if (!subject || typeof subject !== 'string') {
+      throw new Error('storeTopics: subject is required and must be a string');
+    }
+    
     const key = `${TOPICS_PREFIX}${subject.toLowerCase().trim()}`;
     const data = {
       topics,
@@ -153,6 +170,12 @@ export async function storeTopics(
  */
 export async function getTopics(subject: string): Promise<{ topics: Topic[]; learningType: 'visual' | 'audio' | 'text'; generatedAt: string } | null> {
   try {
+    // Safety check: ensure subject is defined
+    if (!subject || typeof subject !== 'string') {
+      console.warn('getTopics: subject is undefined or not a string');
+      return null;
+    }
+    
     const key = `${TOPICS_PREFIX}${subject.toLowerCase().trim()}`;
     const raw = await AsyncStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
@@ -167,6 +190,12 @@ export async function getTopics(subject: string): Promise<{ topics: Topic[]; lea
  */
 export async function clearTopics(subject: string): Promise<void> {
   try {
+    // Safety check: ensure subject is defined
+    if (!subject || typeof subject !== 'string') {
+      console.warn('clearTopics: subject is undefined or not a string');
+      return;
+    }
+    
     const key = `${TOPICS_PREFIX}${subject.toLowerCase().trim()}`;
     await AsyncStorage.removeItem(key);
   } catch (error) {
@@ -186,6 +215,14 @@ export async function storeTopicContent(
   content: any // GeneratedContent type
 ): Promise<void> {
   try {
+    // Safety check: ensure subject and topic are defined
+    if (!subject || typeof subject !== 'string') {
+      throw new Error('storeTopicContent: subject is required and must be a string');
+    }
+    if (!topic || typeof topic !== 'string') {
+      throw new Error('storeTopicContent: topic is required and must be a string');
+    }
+    
     const key = `${CONTENT_PREFIX}${subject.toLowerCase().trim()}:${topic.toLowerCase().trim()}:${learningMode}`;
     const data = {
       content,
@@ -211,6 +248,16 @@ export async function getTopicContent(
   learningMode: 'visual' | 'audio' | 'text'
 ): Promise<{ content: any; cachedAt: string } | null> {
   try {
+    // Safety check: ensure subject and topic are defined
+    if (!subject || typeof subject !== 'string') {
+      console.warn('getTopicContent: subject is undefined or not a string');
+      return null;
+    }
+    if (!topic || typeof topic !== 'string') {
+      console.warn('getTopicContent: topic is undefined or not a string');
+      return null;
+    }
+    
     const key = `${CONTENT_PREFIX}${subject.toLowerCase().trim()}:${topic.toLowerCase().trim()}:${learningMode}`;
     const raw = await AsyncStorage.getItem(key);
     if (raw) {
@@ -234,6 +281,16 @@ export async function clearTopicContent(
   learningMode?: 'visual' | 'audio' | 'text'
 ): Promise<void> {
   try {
+    // Safety check: ensure subject and topic are defined
+    if (!subject || typeof subject !== 'string') {
+      console.warn('clearTopicContent: subject is undefined or not a string');
+      return;
+    }
+    if (!topic || typeof topic !== 'string') {
+      console.warn('clearTopicContent: topic is undefined or not a string');
+      return;
+    }
+    
     if (learningMode) {
       // Clear specific learning mode content
       const key = `${CONTENT_PREFIX}${subject.toLowerCase().trim()}:${topic.toLowerCase().trim()}:${learningMode}`;

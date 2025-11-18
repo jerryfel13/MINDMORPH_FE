@@ -2,17 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Polyline, Svg } from "react-native-svg";
-
-
-
-const SUBJECT_PERFORMANCE = [
-  { label: "Mathematics", percent: 78, color: "#38BDF8" },
-  { label: "History", percent: 92, color: "#A855F7" },
-  { label: "Language", percent: 88, color: "#F97316" },
-];
+import { getComprehensiveAnalytics } from "@/lib/ml-service";
 
 type ScorePair = [number, number];
 
@@ -50,6 +43,12 @@ function toLinePoints(percentages: number[]): string {
 }
 
 
+interface SubjectPerformance {
+  label: string;
+  percent: number;
+  color: string;
+}
+
 export default function AnalyticsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ origin?: string; subject?: string }>();
@@ -57,43 +56,10 @@ export default function AnalyticsScreen() {
     ? params.subject.charAt(0).toUpperCase() + params.subject.slice(1)
     : undefined;
 
-   const [quizScores, setQuizScores] = useState<QuizScores>({
-    visual: [
-      [7, 10],
-      [3, 20],
-      [12, 20],
-      [49, 50],
-      [9, 10],
-      [45, 50],
-      [18, 20],
-      [5, 10],
-      [48, 50],
-      [26, 50]
-    ],
-    audio: [
-      [4, 10],
-      [15, 20],
-      [8, 20],
-      [33, 50],
-      [6, 10],
-      [21, 50],
-      [12, 20],
-      [3, 10],
-      [47, 50],
-      [28, 50]
-    ],
-    text: [
-      [9, 10],
-      [18, 20],
-      [11, 20],
-      [45, 50],
-      [7, 10],
-      [30, 50],
-      [13, 20],
-      [2, 10],
-      [50, 50],
-      [22, 50]
-    ]
+  const [quizScores, setQuizScores] = useState<QuizScores>({
+    visual: [],
+    audio: [],
+    text: []
   });
 
   const [linePoints, setLinePoints] = useState<LinePoints>({
@@ -101,6 +67,79 @@ export default function AnalyticsScreen() {
     audio: "",
     text: ""
   });
+
+  const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([]);
+  const [overallPercent, setOverallPercent] = useState(0);
+  const [engagementData, setEngagementData] = useState<any>(null);
+  const [improvementSuggestions, setImprovementSuggestions] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
+  const [currentMonth, setCurrentMonth] = useState<string>("");
+
+  // Initialize current month on mount
+  useEffect(() => {
+    const now = new Date();
+    setCurrentMonth(now.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+  }, []);
+
+  // Fetch analytics data
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [params.subject]);
+
+  const fetchAnalyticsData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Fetch comprehensive analytics in a single call
+      const analytics = await getComprehensiveAnalytics(params.subject);
+
+      // Set quiz scores
+      setQuizScores(analytics.quizScores);
+
+      // Set subject performance
+      setSubjectPerformance(analytics.subjectPerformance);
+
+      // Set overall percent
+      setOverallPercent(analytics.overallPercent);
+
+      // Set engagement data
+      setEngagementData(analytics.engagement);
+
+      // Set improvement suggestions
+      setImprovementSuggestions(analytics.improvementSuggestions || []);
+
+      // Set last update time
+      if (analytics.lastUpdate) {
+        const updateDate = new Date(analytics.lastUpdate);
+        setLastUpdate(updateDate.toLocaleString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        }));
+        // Set current month from last update date
+        setCurrentMonth(updateDate.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+      } else {
+        // Fallback to current date
+        const now = new Date();
+        setCurrentMonth(now.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+      }
+
+    } catch (err: any) {
+      console.error("Error fetching analytics:", err);
+      setError(err.message || "Failed to load analytics data");
+      // Set default/fallback data
+      setQuizScores({ visual: [], audio: [], text: [] });
+      setSubjectPerformance([]);
+      setOverallPercent(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const percentages = {
@@ -134,7 +173,9 @@ export default function AnalyticsScreen() {
             </TouchableOpacity>
             <View style={styles.monthPill}>
               <Ionicons name="chevron-back" size={16} color="#0F172A" />
-              <Text style={styles.monthLabel}>October 2023</Text>
+              <Text style={styles.monthLabel}>
+                {currentMonth || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+              </Text>
               <Ionicons name="chevron-forward" size={16} color="#0F172A" />
             </View>
           </View>
@@ -146,113 +187,200 @@ export default function AnalyticsScreen() {
                 Quiz results for {subjectLabel} synced. Adaptive recommendations updated.
               </Text>
             ) : null}
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity onPress={fetchAnalyticsData} style={styles.retryButton}>
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#1890FF" />
+              <Text style={styles.loadingText}>Loading analytics...</Text>
+            </View>
+          ) : (
+            <>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Learning Style Evolution</Text>
-            <View style={styles.chartWrapper}>
-              <Svg height="160" width="100%">
-                <Polyline
-                  points={linePoints.visual}
-                  fill="none"
-                  stroke="#38BDF8"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Polyline
-                  points={linePoints.audio}
-                  fill="none"
-                  stroke="#F97316"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Polyline
-                  points={linePoints.text}
-                  fill="none"
-                  stroke="#A855F7"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </View>
-            <View style={styles.legendRow}>
-              {[
-                { label: "Visual", color: "#38BDF8" },
-                { label: "Audio", color: "#F97316" },
-                { label: "Text", color: "#A855F7" },
-              ].map((item) => (
-                <View key={item.label} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                  <Text style={styles.legendLabel}>{item.label}</Text>
+            {quizScores.visual.length === 0 && quizScores.audio.length === 0 && quizScores.text.length === 0 ? (
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>No quiz data available yet. Complete quizzes to see your learning style evolution.</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.chartWrapper}>
+                  <Svg height="160" width="100%">
+                    {linePoints.visual && (
+                      <Polyline
+                        points={linePoints.visual}
+                        fill="none"
+                        stroke="#38BDF8"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                    {linePoints.audio && (
+                      <Polyline
+                        points={linePoints.audio}
+                        fill="none"
+                        stroke="#F97316"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                    {linePoints.text && (
+                      <Polyline
+                        points={linePoints.text}
+                        fill="none"
+                        stroke="#A855F7"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                  </Svg>
                 </View>
-              ))}
-            </View>
+                <View style={styles.legendRow}>
+                  {[
+                    { label: "Visual", color: "#38BDF8", count: quizScores.visual.length },
+                    { label: "Audio", color: "#F97316", count: quizScores.audio.length },
+                    { label: "Text", color: "#A855F7", count: quizScores.text.length },
+                  ].map((item) => (
+                    <View key={item.label} style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                      <Text style={styles.legendLabel}>
+                        {item.label} {item.count > 0 && `(${item.count})`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
           </View>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Subject Performance</Text>
             <View style={styles.performanceBarWrapper}>
               <View style={styles.overallBar}>
-                <View style={styles.overallFill} />
+                <View style={[styles.overallFill, { width: `${overallPercent}%` }]} />
                 <View style={styles.overallPercentBadge}>
-                  <Text style={styles.overallPercentText}>85%</Text>
+                  <Text style={styles.overallPercentText}>{overallPercent}%</Text>
                 </View>
               </View>
             </View>
-            {SUBJECT_PERFORMANCE.map((item) => (
-              <View key={item.label} style={styles.subjectRow}>
-                <Text style={styles.subjectLabel}>{item.label}</Text>
-                <View style={styles.subjectBar}>
-                  <View style={[styles.subjectFill, { width: `${item.percent}%`, backgroundColor: item.color }]} />
+            {subjectPerformance.length > 0 ? (
+              subjectPerformance.map((item) => (
+                <View key={item.label} style={styles.subjectRow}>
+                  <Text style={styles.subjectLabel}>{item.label}</Text>
+                  <View style={styles.subjectBar}>
+                    <View style={[styles.subjectFill, { width: `${item.percent}%`, backgroundColor: item.color }]} />
+                  </View>
+                  <Text style={styles.subjectPercent}>{item.percent}%</Text>
                 </View>
-                <Text style={styles.subjectPercent}>{item.percent}%</Text>
-              </View>
-            ))}
+              ))
+            ) : (
+              <Text style={styles.noDataText}>No subject performance data available</Text>
+            )}
           </View>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Engagement Patterns</Text>
-            <View style={styles.heatmap}>
-              {[...Array(56).keys()].map((index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.heatCell,
-                    {
-                      backgroundColor: `rgba(251, 146, 60, ${
-                        0.25 + ((index % 7) + 2) / 12
-                      })`,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={styles.heatmapLabels}>
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                <Text key={day} style={styles.heatmapLabel}>
-                  {day}
-                </Text>
-              ))}
-            </View>
+            {engagementData ? (
+              <>
+                <View style={styles.engagementStats}>
+                  <View style={styles.engagementStat}>
+                    <Text style={styles.engagementStatValue}>{engagementData.engagementScore || 0}%</Text>
+                    <Text style={styles.engagementStatLabel}>Engagement</Text>
+                  </View>
+                  <View style={styles.engagementStat}>
+                    <Text style={styles.engagementStatValue}>{engagementData.avgFocus || 0}%</Text>
+                    <Text style={styles.engagementStatLabel}>Avg Focus</Text>
+                  </View>
+                  <View style={styles.engagementStat}>
+                    <Text style={styles.engagementStatValue}>{Math.round((engagementData.totalTime || 0) / 60)}m</Text>
+                    <Text style={styles.engagementStatLabel}>Study Time</Text>
+                  </View>
+                </View>
+                {engagementData.status && (
+                  <View style={[styles.engagementStatus, { 
+                    backgroundColor: engagementData.status === 'high' ? 'rgba(34, 197, 94, 0.1)' :
+                                    engagementData.status === 'medium' ? 'rgba(251, 146, 60, 0.1)' :
+                                    'rgba(239, 68, 68, 0.1)'
+                  }]}>
+                    <Text style={styles.engagementStatusText}>
+                      Status: {engagementData.status.charAt(0).toUpperCase() + engagementData.status.slice(1)}
+                      {engagementData.trend && ` • ${engagementData.trend.charAt(0).toUpperCase() + engagementData.trend.slice(1)}`}
+                    </Text>
+                  </View>
+                )}
+                {engagementData.alerts && engagementData.alerts.length > 0 && (
+                  <View style={styles.alertsContainer}>
+                    {engagementData.alerts.map((alert: string, index: number) => (
+                      <View key={index} style={styles.alertItem}>
+                        <Ionicons name="alert-circle" size={16} color="#F59E0B" />
+                        <Text style={styles.alertText}>{alert}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.heatmap}>
+                {[...Array(56).keys()].map((index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.heatCell,
+                      {
+                        backgroundColor: `rgba(251, 146, 60, ${
+                          0.25 + ((index % 7) + 2) / 12
+                        })`,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+            {!engagementData && (
+              <View style={styles.heatmapLabels}>
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                  <Text key={day} style={styles.heatmapLabel}>
+                    {day}
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
 
-          <TouchableOpacity
-            style={styles.secondaryCta}
-            activeOpacity={0.85}
-            onPress={() =>
-              router.push({
-                pathname: "/behavior",
-                params: { subject: params.subject ?? "math" },
-              })
-            }
-          >
-            <Text style={styles.secondaryCtaText}>View Behavior Tracking Details</Text>
-          </TouchableOpacity>
+          {improvementSuggestions.length > 0 && (
+            <View style={styles.card}>
+              <View style={styles.suggestionsHeader}>
+                <Ionicons name="bulb" size={20} color="#F59E0B" />
+                <Text style={styles.cardTitle}>AI-Powered Improvement Suggestions</Text>
+              </View>
+              <View style={styles.suggestionsList}>
+                {improvementSuggestions.map((suggestion, index) => (
+                  <View key={index} style={styles.suggestionItem}>
+                    <View style={styles.suggestionBullet} />
+                    <Text style={styles.suggestionText}>{suggestion}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
-          <Text style={styles.footerNote}>Last update • 10:30 AM, Oct 26, 2023</Text>
+          <Text style={styles.footerNote}>
+            {lastUpdate ? `Last update • ${lastUpdate}` : "No data available"}
+          </Text>
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -468,5 +596,130 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Montserrat_600SemiBold",
     color: "#FFFFFF",
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+  },
+  errorContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 12,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: "Roboto_500Medium",
+    color: "#B91C1C",
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#EF4444",
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 12,
+    fontFamily: "Roboto_500Medium",
+    color: "#FFFFFF",
+  },
+  noDataText: {
+    fontSize: 13,
+    fontFamily: "Roboto_400Regular",
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 12,
+    fontStyle: "italic",
+  },
+  noDataContainer: {
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  engagementStats: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginTop: 18,
+    marginBottom: 16,
+  },
+  engagementStat: {
+    alignItems: "center",
+    gap: 6,
+  },
+  engagementStatValue: {
+    fontSize: 24,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#0F172A",
+  },
+  engagementStatLabel: {
+    fontSize: 12,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+  },
+  engagementStatus: {
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  engagementStatusText: {
+    fontSize: 13,
+    fontFamily: "Roboto_500Medium",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  alertsContainer: {
+    marginTop: 16,
+    gap: 8,
+  },
+  alertItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    backgroundColor: "rgba(251, 146, 60, 0.1)",
+    borderRadius: 8,
+  },
+  alertText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Roboto_400Regular",
+    color: "#92400E",
+  },
+  suggestionsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  suggestionsList: {
+    gap: 12,
+  },
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  suggestionBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F59E0B",
+    marginTop: 6,
+    flexShrink: 0,
+  },
+  suggestionText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#0F172A",
+    lineHeight: 20,
   },
 });

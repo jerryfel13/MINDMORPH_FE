@@ -66,23 +66,29 @@ export function useAIContent(): UseAIContentResult {
       setLoading(true);
       setError(null);
       
+      // Fallback: if topic is null/undefined, use subject as topic
+      const topicToUse = topic || subject;
+      if (!topic && subject) {
+        console.log(`[useAIContent] Topic was null/undefined, using subject as topic: ${subject}`);
+      }
+      
       // First, check if content is cached
-      const cached = await getTopicContent(subject, topic, learningMode);
+      const cached = await getTopicContent(subject, topicToUse, learningMode);
       if (cached && cached.content) {
-        console.log('📦 Using cached content for', subject, topic, learningMode);
+        console.log('📦 Using cached content for', subject, topicToUse, learningMode);
         setContent(cached.content);
         setLoading(false);
         return; // Exit early - use cached content
       }
       
       // If not cached, generate new content
-      console.log('🔄 Generating new content for', subject, topic, learningMode);
-      const result = await generateContentForMode(subject, topic, learningMode, difficulty);
+      console.log('🔄 Generating new content for', subject, topicToUse, learningMode);
+      const result = await generateContentForMode(subject, topicToUse, learningMode, difficulty);
       setContent(result);
       
       // Cache the generated content for future use
       try {
-        await storeTopicContent(subject, topic, learningMode, result);
+        await storeTopicContent(subject, topicToUse, learningMode, result);
       } catch (cacheError) {
         console.warn('Failed to cache content (non-critical):', cacheError);
         // Don't throw - caching failure shouldn't break the flow

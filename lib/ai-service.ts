@@ -1,6 +1,6 @@
 // AI Service - AI Content Generation API calls
-import { getToken } from './storage';
 import { getApiBaseUrl } from './api';
+import { getToken } from './storage';
 
 const API_URL = getApiBaseUrl();
 
@@ -295,13 +295,15 @@ export async function generateContentForMode(
 
 /**
  * Generate quiz questions based on learning mode
+ * @param content - Optional: The actual content that was generated/taught, to ensure questions are relevant
  */
 export async function generateQuiz(
   subject: string,
   topic: string,
   learningMode?: 'visual' | 'audio' | 'text',
   difficulty: 'easy' | 'medium' | 'hard' = 'medium',
-  numQuestions: number = 5
+  numQuestions: number = 5,
+  content?: GeneratedContent | null
 ): Promise<QuizResponse> {
   try {
     const headers = await getAuthHeaders();
@@ -314,6 +316,7 @@ export async function generateQuiz(
         learningMode: learningMode || null, // null = use ML recommendation
         difficulty,
         numQuestions,
+        content: content || null, // Pass the actual content to ensure relevant questions
       }),
     });
 

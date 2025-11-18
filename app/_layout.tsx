@@ -42,7 +42,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="register" />
         <Stack.Screen name="login" />
-        <Stack.Screen name="preference" />
+        <Stack.Screen name="subject-selection" />
         <Stack.Screen name="journey" />
         <Stack.Screen name="analytics" />
         <Stack.Screen name="profile" />

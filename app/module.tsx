@@ -135,7 +135,8 @@ export default function ModulePage() {
       }
       
       // If no saved result, generate new quiz
-      const quizData = await generateQuiz(subject, topic, learningType, 'medium', 5);
+      // Pass the actual content to ensure questions are based on what was taught
+      const quizData = await generateQuiz(subject, topic, learningType, 'medium', 5, content || null);
       setQuiz(quizData);
     } catch (error: any) {
       console.error("Failed to load quiz:", error);
@@ -148,7 +149,8 @@ export default function ModulePage() {
   const loadQuiz = async () => {
     try {
       setQuizLoading(true);
-      const quizData = await generateQuiz(subject, topic, learningType, 'medium', 5);
+      // Pass the actual content to ensure questions are based on what was taught
+      const quizData = await generateQuiz(subject, topic, learningType, 'medium', 5, content || null);
       setQuiz(quizData);
       // Clear any existing results when loading a new quiz
       setQuizResults(null);

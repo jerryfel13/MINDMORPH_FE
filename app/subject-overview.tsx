@@ -1,4 +1,4 @@
-import { SUBJECT_LOOKUP, SubjectMode } from "@/constants/subjects";
+import { SubjectMode } from "@/constants/subjects";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -44,9 +44,31 @@ const MODE_CONTENT: Record<
 
 export default function SubjectOverviewScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ subject?: string }>();
-  const subject = params.subject ? SUBJECT_LOOKUP[params.subject] : undefined;
+  const params = useLocalSearchParams<{ 
+    subject?: string; 
+    subjectName?: string; 
+    subjectIcon?: string; 
+    subjectColors?: string;
+  }>();
+  
   const subjectId = params.subject?.toString() || "";
+  const subjectName = params.subjectName?.toString() || "";
+  const subjectIcon = params.subjectIcon?.toString() || "book-open-variant";
+  const subjectColors = params.subjectColors ? JSON.parse(params.subjectColors as string) : ["#2491FF", "#58CBFF"];
+
+  // Create subject object from params
+  const subject = useMemo(() => {
+    if (!subjectId || !subjectName) return null;
+    
+    // Default recommended modes - can be customized per subject later
+    return {
+      id: subjectId,
+      title: subjectName,
+      icon: subjectIcon,
+      colors: subjectColors,
+      recommendedModes: ['visual', 'audio', 'text'] as SubjectMode[],
+    };
+  }, [subjectId, subjectName, subjectIcon, subjectColors]);
 
   const { recommendation } = useMLRecommendation(subjectId);
   const { progress: realProgress } = useSubjectProgress(subjectId);
@@ -56,6 +78,21 @@ export default function SubjectOverviewScreen() {
   const [loadingTopics, setLoadingTopics] = useState(true);
   const [allLearningTypesCompleted, setAllLearningTypesCompleted] = useState(false);
   const [checkingLearningTypes, setCheckingLearningTypes] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Initialize loading state
+  useEffect(() => {
+    if (subject) {
+      setIsLoading(false);
+    } else if (!subjectId || !subjectName) {
+      // If no subject data, redirect back after a timeout
+      const timer = setTimeout(() => {
+        console.warn("Subject data not found, redirecting back");
+        router.back();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [subject, subjectId, subjectName, router]);
 
   // Check if user has completed all learning types from database (activity_logs)
   useEffect(() => {
@@ -145,11 +182,16 @@ export default function SubjectOverviewScreen() {
     loadTopicsAndProgress();
   }, [subjectId, recommendation]);
 
-  if (!subject) {
+  if (isLoading || !subject) {
     return (
       <SafeAreaView style={styles.fallback}>
         <ActivityIndicator color="#0F172A" size="large" />
         <Text style={styles.fallbackText}>Loading subject overview…</Text>
+        {!subjectId && (
+          <Text style={[styles.fallbackText, { marginTop: 8, fontSize: 12 }]}>
+            Missing subject information. Redirecting...
+          </Text>
+        )}
       </SafeAreaView>
     );
   }

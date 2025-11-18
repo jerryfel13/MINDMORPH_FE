@@ -244,3 +244,53 @@ export async function calculateAdaptiveDifficulty(
   }
 }
 
+/**
+ * Comprehensive Analytics Response
+ */
+export interface ComprehensiveAnalytics {
+  quizScores: {
+    visual: [number, number][];
+    audio: [number, number][];
+    text: [number, number][];
+  };
+  subjectPerformance: {
+    label: string;
+    percent: number;
+    color: string;
+  }[];
+  overallPercent: number;
+  modeRecommendation: MLRecommendation;
+  engagement: EngagementAnalysis;
+  improvementSuggestions: string[];
+  lastUpdate: string;
+}
+
+/**
+ * Get comprehensive analytics data for the analytics dashboard
+ * Aggregates all analytics in a single call for better performance
+ */
+export async function getComprehensiveAnalytics(subject?: string): Promise<ComprehensiveAnalytics> {
+  try {
+    const headers = await getAuthHeaders();
+    const url = subject 
+      ? `${API_URL}/api/ml/analytics?subject=${encodeURIComponent(subject)}`
+      : `${API_URL}/api/ml/analytics`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || `Failed to get analytics: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.analytics as ComprehensiveAnalytics;
+  } catch (error: any) {
+    console.error('Error getting comprehensive analytics:', error);
+    throw error;
+  }
+}
+

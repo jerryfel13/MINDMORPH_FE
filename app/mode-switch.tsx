@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useEngagement } from "../hooks/use-engagement";
 import { useMLRecommendation } from "../hooks/use-ml-recommendation";
 import { hasCompletedAllLearningTypesFromDB } from "../lib/learning-type-service";
+import { getTopicsFromDB } from "../lib/topics-service";
 
 const MODES = [
   { id: "visual", label: "Visual", icon: "eye" },
@@ -349,14 +350,42 @@ export default function ModeSwitchScreen() {
                       isCompleted && !isActive && styles.modeChipCompleted,
                       isCompact && styles.modeChipCompact
                     ]}
-                    onPress={() => {
-                      router.push({
-                        pathname: "/learning-type-test",
-                        params: {
-                          subject: params.subject,
-                          topic: "Algebra Basics", // You can make this dynamic
-                        },
-                      });
+                    onPress={async () => {
+                      try {
+                        // Get the first available topic for this subject and learning mode
+                        const subjectKey = (params.subject || "math").toString();
+                        const topicsData = await getTopicsFromDB(subjectKey, mode.id as 'visual' | 'audio' | 'text');
+                        
+                        if (topicsData && topicsData.topics && topicsData.topics.length > 0) {
+                          // Navigate to module with the first topic
+                          const firstTopic = topicsData.topics[0];
+                          router.push({
+                            pathname: "/module",
+                            params: {
+                              subject: subjectKey,
+                              topic: firstTopic.title,
+                              learningType: mode.id,
+                            },
+                          });
+                        } else {
+                          // No topics available, navigate to topics screen to generate/select
+                          router.push({
+                            pathname: "/topics",
+                            params: {
+                              subject: subjectKey,
+                            },
+                          });
+                        }
+                      } catch (error: any) {
+                        console.error("Error getting topics:", error);
+                        // Fallback: navigate to topics screen
+                        router.push({
+                          pathname: "/topics",
+                          params: {
+                            subject: params.subject || "math",
+                          },
+                        });
+                      }
                     }}
                     activeOpacity={0.7}
                 >
