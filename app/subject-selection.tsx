@@ -2,9 +2,10 @@ import { generateCareerSubjects, getSubjects, getUserSubjects, saveUserSubjects,
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -44,6 +45,17 @@ export default function SubjectSelectionScreen() {
   const [showInterestsInput, setShowInterestsInput] = useState(false);
   const [hasExistingSubjects, setHasExistingSubjects] = useState(false);
   const [existingSubjects, setExistingSubjects] = useState<Subject[]>([]);
+  const [showScrollIndicator, setShowScrollIndicator] = useState(true);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    language: true,
+    general: true,
+    languageCareer: true,
+    career: true,
+  });
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
     checkExistingSubjects();
@@ -210,6 +222,37 @@ export default function SubjectSelectionScreen() {
     );
   };
 
+  // Filter subjects based on search query
+  const filterSubjects = (subjects: Subject[]) => {
+    if (!searchQuery.trim()) return subjects;
+    const query = searchQuery.toLowerCase();
+    return subjects.filter(
+      (subject) =>
+        subject.name.toLowerCase().includes(query) ||
+        subject.description.toLowerCase().includes(query)
+    );
+  };
+
+  // Toggle section expansion
+  const toggleSection = (sectionKey: string) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey],
+    }));
+  };
+
+  // Get filtered subjects for each category
+  const getFilteredLanguageSubjects = () => filterSubjects(languageSubjects);
+  const getFilteredGeneralSubjects = () => filterSubjects(otherGeneralSubjects);
+  const getFilteredLanguageCareerSubjects = () => filterSubjects(languageCareerSubjects);
+  const getFilteredCareerSubjects = () => filterSubjects(otherCareerSubjects);
+
+  // Category filter function
+  const shouldShowCategory = (categoryKey: string) => {
+    if (!selectedCategory) return true;
+    return selectedCategory === categoryKey;
+  };
+
   const handleContinue = async () => {
     if (selectedSubjects.length === 0) {
       setError(isAddMode ? "Please select at least one subject to add" : "Please select at least one subject to continue");
@@ -290,8 +333,26 @@ export default function SubjectSelectionScreen() {
     <LinearGradient colors={["#F4F8FF", "#FFFFFF"]} style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView
+          ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            {
+              useNativeDriver: false,
+              listener: (event: any) => {
+                const offsetY = event.nativeEvent.contentOffset.y;
+                const contentHeight = event.nativeEvent.contentSize.height;
+                const scrollViewHeight = event.nativeEvent.layoutMeasurement.height;
+                
+                // Show indicator if user is in the top 60% of the content
+                // Hide if they've scrolled past that or reached near the bottom
+                const shouldShow = offsetY < contentHeight * 0.6 && contentHeight > scrollViewHeight;
+                setShowScrollIndicator(shouldShow);
+              },
+            }
+          )}
+          scrollEventThrottle={16}
         >
           {fromJourney && (
             <TouchableOpacity
@@ -336,35 +397,187 @@ export default function SubjectSelectionScreen() {
             </View>
           )}
 
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Ionicons name="search" size={20} color="#64748B" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search subjects..."
+                placeholderTextColor="#94A3B8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                clearButtonMode="while-editing"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  style={styles.clearButton}
+                >
+                  <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Category Filter Chips */}
+          <View style={styles.categoryFilterContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryFilterContent}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === null && styles.categoryChipActive,
+                ]}
+                onPress={() => setSelectedCategory(null)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategory === null && styles.categoryChipTextActive,
+                  ]}
+                >
+                  All
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === "language" && styles.categoryChipActive,
+                ]}
+                onPress={() => setSelectedCategory("language")}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chatbubbles"
+                  size={14}
+                  color={selectedCategory === "language" ? "#FFFFFF" : "#64748B"}
+                />
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategory === "language" && styles.categoryChipTextActive,
+                  ]}
+                >
+                  Language
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === "general" && styles.categoryChipActive,
+                ]}
+                onPress={() => setSelectedCategory("general")}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="school"
+                  size={14}
+                  color={selectedCategory === "general" ? "#FFFFFF" : "#64748B"}
+                />
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategory === "general" && styles.categoryChipTextActive,
+                  ]}
+                >
+                  Academic
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === "career" && styles.categoryChipActive,
+                ]}
+                onPress={() => setSelectedCategory("career")}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="briefcase"
+                  size={14}
+                  color={selectedCategory === "career" ? "#FFFFFF" : "#64748B"}
+                />
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategory === "career" && styles.categoryChipTextActive,
+                  ]}
+                >
+                  Career
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
           {/* Language & Communication Subjects Section */}
-          {languageSubjects.filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length > 0 && (
+          {shouldShowCategory("language") && getFilteredLanguageSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length > 0 && (
             <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="chatbubbles" size={20} color="#0F172A" />
-                <Text style={styles.sectionTitle}>Language & Communication</Text>
-              </View>
-              <View style={styles.subjectsGrid}>
-                {languageSubjects
-                  .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
-                  .map((subject, index) => renderSubjectCard(subject, index, 'language'))
-                  .filter(card => card !== null)}
-              </View>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection("language")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="chatbubbles" size={20} color="#0F172A" />
+                  <Text style={styles.sectionTitle}>Language & Communication</Text>
+                  <View style={styles.sectionCountBadge}>
+                    <Text style={styles.sectionCountText}>
+                      {getFilteredLanguageSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name={expandedSections.language ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+              {expandedSections.language && (
+                <View style={styles.subjectsGrid}>
+                  {getFilteredLanguageSubjects()
+                    .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
+                    .map((subject, index) => renderSubjectCard(subject, index, 'language'))
+                    .filter(card => card !== null)}
+                </View>
+              )}
             </View>
           )}
 
           {/* General Academic Subjects Section */}
-          {otherGeneralSubjects.filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length > 0 && (
+          {shouldShowCategory("general") && getFilteredGeneralSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length > 0 && (
             <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="school" size={20} color="#0F172A" />
-                <Text style={styles.sectionTitle}>General Academic</Text>
-              </View>
-              <View style={styles.subjectsGrid}>
-                {otherGeneralSubjects
-                  .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
-                  .map((subject, index) => renderSubjectCard(subject, index, 'general'))
-                  .filter(card => card !== null)}
-              </View>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection("general")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="school" size={20} color="#0F172A" />
+                  <Text style={styles.sectionTitle}>General Academic</Text>
+                  <View style={styles.sectionCountBadge}>
+                    <Text style={styles.sectionCountText}>
+                      {getFilteredGeneralSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name={expandedSections.general ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+              {expandedSections.general && (
+                <View style={styles.subjectsGrid}>
+                  {getFilteredGeneralSubjects()
+                    .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
+                    .map((subject, index) => renderSubjectCard(subject, index, 'general'))
+                    .filter(card => card !== null)}
+                </View>
+              )}
             </View>
           )}
 
@@ -379,103 +592,142 @@ export default function SubjectSelectionScreen() {
           )}
 
           {/* Language Career Subjects Section (e.g., Japanese-for-tech) */}
-          {languageCareerSubjects.filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length > 0 && (
+          {shouldShowCategory("career") && getFilteredLanguageCareerSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length > 0 && (
             <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="language" size={20} color="#0F172A" />
-                <Text style={styles.sectionTitle}>Language & Tech Careers</Text>
-              </View>
-              <View style={styles.subjectsGrid}>
-                {languageCareerSubjects
-                  .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
-                  .map((subject, index) => renderSubjectCard(subject, index, 'language-career'))
-                  .filter(card => card !== null)}
-              </View>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection("languageCareer")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="language" size={20} color="#0F172A" />
+                  <Text style={styles.sectionTitle}>Language & Tech Careers</Text>
+                  <View style={styles.sectionCountBadge}>
+                    <Text style={styles.sectionCountText}>
+                      {getFilteredLanguageCareerSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name={expandedSections.languageCareer ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+              {expandedSections.languageCareer && (
+                <View style={styles.subjectsGrid}>
+                  {getFilteredLanguageCareerSubjects()
+                    .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
+                    .map((subject, index) => renderSubjectCard(subject, index, 'language-career'))
+                    .filter(card => card !== null)}
+                </View>
+              )}
             </View>
           )}
 
           {/* Career Subjects Section */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="briefcase" size={20} color="#0F172A" />
-              <Text style={styles.sectionTitle}>Career & Technical</Text>
-            </View>
-            
-            {showInterestsInput ? (
-              <View style={styles.interestsInputContainer}>
-                <Text style={styles.interestsLabel}>
-                  What are you interested in? (e.g., "web development, data science, cybersecurity")
-                </Text>
-                <TextInput
-                  style={styles.interestsInput}
-                  placeholder="Enter your interests..."
-                  value={interests}
-                  onChangeText={setInterests}
-                  multiline
-                />
-                <View style={styles.interestsButtons}>
-                  <TouchableOpacity
-                    style={[styles.generateButton, (!interests.trim() || isGenerating) && styles.generateButtonDisabled]}
-                    onPress={handleGenerateCareerSubjects}
-                    disabled={!interests.trim() || isGenerating}
-                    activeOpacity={0.8}
-                  >
-                    {isGenerating ? (
-                      <>
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                        <Text style={styles.generateButtonText}>Generating...</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                        <Text style={styles.generateButtonText}>Generate Subjects</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => {
-                      setShowInterestsInput(false);
-                      setInterests("");
-                    }}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <>
-                {otherCareerSubjects.filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length === 0 && isAddMode ? (
-                  <View style={styles.emptySection}>
-                    <Text style={styles.emptySectionText}>All career subjects are already in your journey</Text>
-                    <TouchableOpacity
-                      style={styles.generateMoreButton}
-                      onPress={() => setShowInterestsInput(true)}
-                    >
-                      <Ionicons name="sparkles" size={18} color="#1890FF" />
-                      <Text style={styles.generateMoreText}>Generate More Career Subjects</Text>
-                    </TouchableOpacity>
+          {shouldShowCategory("career") && (
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection("career")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="briefcase" size={20} color="#0F172A" />
+                  <Text style={styles.sectionTitle}>Career & Technical</Text>
+                  <View style={styles.sectionCountBadge}>
+                    <Text style={styles.sectionCountText}>
+                      {getFilteredCareerSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length}
+                    </Text>
                   </View>
-                ) : (
-                  <>
-                    <View style={styles.subjectsGrid}>
-                      {otherCareerSubjects
-                        .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
-                        .map((subject, index) => renderSubjectCard(subject, index, 'career'))
-                        .filter(card => card !== null)}
+                </View>
+                <Ionicons
+                  name={expandedSections.career ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+              {expandedSections.career && (
+                <>
+                  {showInterestsInput ? (
+                    <View style={styles.interestsInputContainer}>
+                      <Text style={styles.interestsLabel}>
+                        What are you interested in? (e.g., "web development, data science, cybersecurity")
+                      </Text>
+                      <TextInput
+                        style={styles.interestsInput}
+                        placeholder="Enter your interests..."
+                        value={interests}
+                        onChangeText={setInterests}
+                        multiline
+                      />
+                      <View style={styles.interestsButtons}>
+                        <TouchableOpacity
+                          style={[styles.generateButton, (!interests.trim() || isGenerating) && styles.generateButtonDisabled]}
+                          onPress={handleGenerateCareerSubjects}
+                          disabled={!interests.trim() || isGenerating}
+                          activeOpacity={0.8}
+                        >
+                          {isGenerating ? (
+                            <>
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                              <Text style={styles.generateButtonText}>Generating...</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                              <Text style={styles.generateButtonText}>Generate Subjects</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.cancelButton}
+                          onPress={() => {
+                            setShowInterestsInput(false);
+                            setInterests("");
+                          }}
+                        >
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <TouchableOpacity
-                      style={styles.generateMoreButton}
-                      onPress={() => setShowInterestsInput(true)}
-                    >
-                      <Ionicons name="add-circle-outline" size={18} color="#1890FF" />
-                      <Text style={styles.generateMoreText}>Generate More Career Subjects</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </>
-            )}
-          </View>
+                  ) : (
+                    <>
+                      {getFilteredCareerSubjects().filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id)).length === 0 && isAddMode ? (
+                        <View style={styles.emptySection}>
+                          <Text style={styles.emptySectionText}>All career subjects are already in your journey</Text>
+                          <TouchableOpacity
+                            style={styles.generateMoreButton}
+                            onPress={() => setShowInterestsInput(true)}
+                          >
+                            <Ionicons name="sparkles" size={18} color="#1890FF" />
+                            <Text style={styles.generateMoreText}>Generate More Career Subjects</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={styles.subjectsGrid}>
+                            {getFilteredCareerSubjects()
+                              .filter(s => !isAddMode || !existingSubjects.some(es => es.id === s.id))
+                              .map((subject, index) => renderSubjectCard(subject, index, 'career'))
+                              .filter(card => card !== null)}
+                          </View>
+                          <TouchableOpacity
+                            style={styles.generateMoreButton}
+                            onPress={() => setShowInterestsInput(true)}
+                          >
+                            <Ionicons name="add-circle-outline" size={18} color="#1890FF" />
+                            <Text style={styles.generateMoreText}>Generate More Career Subjects</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          )}
 
           {/* Continue Button */}
           <TouchableOpacity
@@ -507,6 +759,36 @@ export default function SubjectSelectionScreen() {
             </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Scroll Indicator - Shows when there's more content below */}
+        {showScrollIndicator && (
+          <Animated.View
+            style={[
+              styles.scrollIndicator,
+              {
+                opacity: scrollY.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [
+                  {
+                    translateY: scrollY.interpolate({
+                      inputRange: [0, 100],
+                      outputRange: [0, -20],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.scrollIndicatorContent}>
+              <MaterialCommunityIcons name="chevron-down" size={20} color="#1890FF" />
+              <Text style={styles.scrollIndicatorText}>More subjects below</Text>
+            </View>
+          </Animated.View>
+        )}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -587,12 +869,34 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 20,
     fontFamily: "Montserrat_600SemiBold",
     color: "#0F172A",
+    flex: 1,
+  },
+  sectionCountBadge: {
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 28,
+    alignItems: "center",
+  },
+  sectionCountText: {
+    fontSize: 12,
+    fontFamily: "Roboto_600SemiBold",
+    color: "#64748B",
   },
   subjectsGrid: {
     flexDirection: "row",
@@ -773,6 +1077,99 @@ const styles = StyleSheet.create({
     fontFamily: "Roboto_400Regular",
     color: "#94A3B8",
     textAlign: "center",
+  },
+  scrollIndicator: {
+    position: "absolute",
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+  },
+  scrollIndicatorContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    shadowColor: "#1890FF",
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: "rgba(24, 144, 255, 0.2)",
+  },
+  scrollIndicatorText: {
+    fontSize: 13,
+    fontFamily: "Roboto_500Medium",
+    color: "#1890FF",
+  },
+  searchContainer: {
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  searchInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: "Roboto_400Regular",
+    color: "#0F172A",
+    padding: 0,
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  categoryFilterContainer: {
+    marginBottom: 20,
+  },
+  categoryFilterContent: {
+    paddingRight: 24,
+    gap: 10,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  categoryChipActive: {
+    backgroundColor: "#1890FF",
+    borderColor: "#1890FF",
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontFamily: "Roboto_500Medium",
+    color: "#64748B",
+  },
+  categoryChipTextActive: {
+    color: "#FFFFFF",
   },
 });
 

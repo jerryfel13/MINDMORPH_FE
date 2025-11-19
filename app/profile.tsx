@@ -1,9 +1,10 @@
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
-import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getUserData, removeToken } from "../lib/storage";
 
 const SUBJECT_ROWS = [
   [{ label: "Mathematics" }, { label: "Science" }],
@@ -18,6 +19,63 @@ export default function ProfileScreen() {
     visual: true,
     audio: true,
   });
+  const [userData, setUserData] = useState<{
+    email?: string;
+    fullName?: string;
+    avatarUrl?: string | null;
+    preferredLanguage?: string;
+    learningStyle?: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadUserData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await getUserData();
+      if (data) {
+        setUserData(data);
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [loadUserData])
+  );
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout? You will need to login again to access your account.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Clear authentication token and user data
+              await removeToken();
+              // Navigate to login screen
+              router.replace("/login");
+            } catch (error) {
+              console.error("Error during logout:", error);
+              Alert.alert("Error", "Failed to logout. Please try again.");
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   return (
     <LinearGradient
@@ -35,17 +93,35 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-back" size={22} color="#0F172A" />
           </TouchableOpacity>
 
-          <LinearGradient
-            colors={["#1FC7B6", "#6366F1"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatar}
-          >
-            <MaterialCommunityIcons name="brain" size={72} color="#FFFFFF" />
-          </LinearGradient>
+          {isLoading ? (
+            <View style={styles.avatar}>
+              <ActivityIndicator size="large" color="#FFFFFF" />
+            </View>
+          ) : userData?.avatarUrl ? (
+            <View style={styles.avatarContainer}>
+              <Image
+                source={{ uri: userData.avatarUrl }}
+                style={styles.avatarImage}
+              />
+            </View>
+          ) : (
+            <LinearGradient
+              colors={["#1FC7B6", "#6366F1"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatar}
+            >
+              <MaterialCommunityIcons name="brain" size={72} color="#FFFFFF" />
+            </LinearGradient>
+          )}
 
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>Alex Chen</Text>
+            <Text style={styles.name}>
+              {userData?.fullName || "User"}
+            </Text>
+            {userData?.email && (
+              <Text style={styles.email}>{userData.email}</Text>
+            )}
             <TouchableOpacity activeOpacity={0.8}>
               <Text style={styles.editProfile}>Edit Profile</Text>
             </TouchableOpacity>
@@ -122,6 +198,40 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* Account Information Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account Information</Text>
+            <View style={styles.listCard}>
+              {userData?.email && (
+                <View style={styles.metaRow}>
+                  <View style={styles.metaLabelGroup}>
+                    <Ionicons name="mail-outline" size={18} color="#1FC7B6" />
+                    <Text style={styles.listLabel}>Email</Text>
+                  </View>
+                  <Text style={styles.metaValue}>{userData.email}</Text>
+                </View>
+              )}
+              {userData?.preferredLanguage && (
+                <View style={styles.metaRow}>
+                  <View style={styles.metaLabelGroup}>
+                    <Ionicons name="language-outline" size={18} color="#1FC7B6" />
+                    <Text style={styles.listLabel}>Preferred Language</Text>
+                  </View>
+                  <Text style={styles.metaValue}>{userData.preferredLanguage}</Text>
+                </View>
+              )}
+              {userData?.learningStyle && (
+                <View style={styles.metaRow}>
+                  <View style={styles.metaLabelGroup}>
+                    <MaterialCommunityIcons name="brain" size={18} color="#1FC7B6" />
+                    <Text style={styles.listLabel}>Learning Style</Text>
+                  </View>
+                  <Text style={styles.metaValue}>{userData.learningStyle}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About</Text>
             <View style={styles.listCard}>
@@ -136,7 +246,11 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.logoutButton} activeOpacity={0.9}>
+          <TouchableOpacity 
+            style={styles.logoutButton} 
+            activeOpacity={0.9}
+            onPress={handleLogout}
+          >
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -184,6 +298,25 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 8,
   },
+  avatarContainer: {
+    alignSelf: "center",
+    height: 140,
+    width: 140,
+    borderRadius: 70,
+    overflow: "hidden",
+    shadowColor: "#6366F1",
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
   profileInfo: {
     alignItems: "center",
     marginTop: 24,
@@ -193,11 +326,22 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_600SemiBold",
     color: "#0F172A",
   },
+  email: {
+    marginTop: 4,
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+  },
   editProfile: {
-    marginTop: 8,
+    marginTop: 12,
     fontSize: 13,
     fontFamily: "Roboto_500Medium",
     color: "#1FC7B6",
+  },
+  metaLabelGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   section: {
     marginTop: 28,

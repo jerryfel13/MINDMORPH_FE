@@ -29,6 +29,7 @@ export interface Subject {
   icon: string;
   colors: [string, string];
   selectedAt?: string;
+  archivedAt?: string;
 }
 
 /**
@@ -88,6 +89,90 @@ export async function getUserSubjects(): Promise<{
     return data;
   } catch (error: any) {
     console.error('Error getting user subjects:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get user's archived subjects
+ */
+export async function getArchivedSubjects(): Promise<{
+  success: boolean;
+  subjects: Subject[];
+  count: number;
+}> {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/api/subjects/user/archived`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || error.message || `Failed to get archived subjects: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error: any) {
+    console.error('Error getting archived subjects:', error);
+    throw error;
+  }
+}
+
+/**
+ * Archive a subject
+ */
+export async function archiveSubject(subjectId: string): Promise<{
+  success: boolean;
+  message: string;
+  subject: Subject;
+}> {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/api/subjects/user/${encodeURIComponent(subjectId)}/archive`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || error.message || `Failed to archive subject: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error: any) {
+    console.error('Error archiving subject:', error);
+    throw error;
+  }
+}
+
+/**
+ * Unarchive a subject
+ */
+export async function unarchiveSubject(subjectId: string): Promise<{
+  success: boolean;
+  message: string;
+  subject: Subject;
+}> {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/api/subjects/user/${encodeURIComponent(subjectId)}/unarchive`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || error.message || `Failed to unarchive subject: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error: any) {
+    console.error('Error unarchiving subject:', error);
     throw error;
   }
 }

@@ -1,8 +1,8 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, ViewStyle } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEngagement } from "../hooks/use-engagement";
 import { useMLRecommendation } from "../hooks/use-ml-recommendation";
@@ -63,6 +63,7 @@ export default function ModeSwitchScreen() {
   const [allTypesCompleted, setAllTypesCompleted] = useState(false);
   const [checkingCompletion, setCheckingCompletion] = useState(true);
   const [allScoresZero, setAllScoresZero] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Get progress from ML recommendation modeStats (from activity_logs database)
   const getModeProgress = (modeId: string) => {
@@ -76,29 +77,46 @@ export default function ModeSwitchScreen() {
     return stats && stats.totalSessions > 0;
   }).map(mode => mode.id);
 
-  useEffect(() => {
+  const checkLearningTypesCompletion = useCallback(async () => {
     const subjectKey = (params.subject || "math").toString();
     setCheckingCompletion(true);
     
-    // Check if all types are completed from database (activity_logs)
-    hasCompletedAllLearningTypesFromDB(subjectKey)
-      .then((result) => {
-        setAllTypesCompleted(result.completed);
-        setAllScoresZero(result.allScoresZero);
-        console.log(`[Mode Switch] Learning types completion for ${subjectKey}:`, result);
-        if (result.completed) {
-          console.log('✅ All learning types completed - hiding Test Your Learning Type button');
-        } else if (result.allScoresZero) {
-          console.log('⚠️ All learning types completed but all scores are 0 - user needs to retake');
-        }
-      })
-      .catch((err) => {
-        console.error("Error checking learning type completion from database:", err);
-        setAllTypesCompleted(false);
-        setAllScoresZero(false);
-      })
-      .finally(() => setCheckingCompletion(false));
+    try {
+      // Check if all types are completed from database (activity_logs)
+      const result = await hasCompletedAllLearningTypesFromDB(subjectKey);
+      setAllTypesCompleted(result.completed);
+      setAllScoresZero(result.allScoresZero);
+      console.log(`[Mode Switch] Learning types completion for ${subjectKey}:`, result);
+      if (result.completed) {
+        console.log('✅ All learning types completed - hiding Test Your Learning Type button');
+      } else if (result.allScoresZero) {
+        console.log('⚠️ All learning types completed but all scores are 0 - user needs to retake');
+      }
+    } catch (err) {
+      console.error("Error checking learning type completion from database:", err);
+      setAllTypesCompleted(false);
+      setAllScoresZero(false);
+    } finally {
+      setCheckingCompletion(false);
+    }
   }, [params.subject]);
+
+  useEffect(() => {
+    checkLearningTypesCompletion();
+  }, [checkLearningTypesCompletion]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Refresh learning types completion status
+      await checkLearningTypesCompletion();
+      // The ML recommendation and engagement hooks will automatically refresh
+    } catch (err) {
+      console.error("Error refreshing:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [checkLearningTypesCompletion]);
   
   // Use ML recommendation if available, otherwise fall back to params or default
   const mlRecommendedMode = recommendation?.recommendedMode || null;
@@ -310,6 +328,14 @@ export default function ModeSwitchScreen() {
             { paddingBottom: isSmall ? 100 : 120 } // Extra padding for sticky button
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#0EA5E9"]}
+              tintColor="#0EA5E9"
+            />
+          }
         >
           <View style={[styles.card, dynamicStyles.card, isCompact && styles.cardCompact]}>
             <View style={[styles.badgeRow, isSmall && { flexWrap: "wrap" }]}>
