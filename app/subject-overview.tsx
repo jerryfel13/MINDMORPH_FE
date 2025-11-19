@@ -104,11 +104,13 @@ export default function SubjectOverviewScreen() {
       
       try {
         // Check database for quiz results in activity_logs
-        const completed = await hasCompletedAllLearningTypesFromDB(subjectId);
-        console.log(`[Subject Overview] Learning types completion for ${subjectId}:`, completed);
-        setAllLearningTypesCompleted(completed);
-        if (completed) {
+        const result = await hasCompletedAllLearningTypesFromDB(subjectId);
+        console.log(`[Subject Overview] Learning types completion for ${subjectId}:`, result);
+        setAllLearningTypesCompleted(result.completed);
+        if (result.completed) {
           console.log('✅ All learning types completed - hiding Recommended Modes section');
+        } else if (result.allScoresZero) {
+          console.log('⚠️ All learning types completed but all scores are 0');
         } else {
           console.log('❌ Not all learning types completed - showing Recommended Modes section');
         }

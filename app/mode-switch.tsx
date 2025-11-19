@@ -62,6 +62,7 @@ export default function ModeSwitchScreen() {
   // Gate: require all learning types before continuing to content for this subject
   const [allTypesCompleted, setAllTypesCompleted] = useState(false);
   const [checkingCompletion, setCheckingCompletion] = useState(true);
+  const [allScoresZero, setAllScoresZero] = useState(false);
 
   // Get progress from ML recommendation modeStats (from activity_logs database)
   const getModeProgress = (modeId: string) => {
@@ -81,16 +82,20 @@ export default function ModeSwitchScreen() {
     
     // Check if all types are completed from database (activity_logs)
     hasCompletedAllLearningTypesFromDB(subjectKey)
-      .then((completed) => {
-        setAllTypesCompleted(completed);
-        console.log(`[Mode Switch] Learning types completion for ${subjectKey}:`, completed);
-        if (completed) {
+      .then((result) => {
+        setAllTypesCompleted(result.completed);
+        setAllScoresZero(result.allScoresZero);
+        console.log(`[Mode Switch] Learning types completion for ${subjectKey}:`, result);
+        if (result.completed) {
           console.log('✅ All learning types completed - hiding Test Your Learning Type button');
+        } else if (result.allScoresZero) {
+          console.log('⚠️ All learning types completed but all scores are 0 - user needs to retake');
         }
       })
       .catch((err) => {
         console.error("Error checking learning type completion from database:", err);
         setAllTypesCompleted(false);
+        setAllScoresZero(false);
       })
       .finally(() => setCheckingCompletion(false));
   }, [params.subject]);
@@ -481,8 +486,21 @@ export default function ModeSwitchScreen() {
             </View>
           )}
 
-          {/* Only show Test Your Learning Type button if user hasn't completed all learning types */}
-          {!allTypesCompleted && !checkingCompletion && (
+          {/* Show notification if all scores are zero */}
+          {allScoresZero && !checkingCompletion && (
+            <View style={styles.warningBanner}>
+              <MaterialCommunityIcons name="alert-circle" size={20} color="#F59E0B" />
+              <View style={styles.warningContent}>
+                <Text style={styles.warningTitle}>Retake Required</Text>
+                <Text style={styles.warningText}>
+                  All your learning type assessments scored 0%. Please retake at least one assessment to continue.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Show Test Your Learning Type button if user hasn't completed all learning types OR all scores are zero */}
+          {(!allTypesCompleted || allScoresZero) && !checkingCompletion && (
             <TouchableOpacity
               style={styles.testButton}
               onPress={() => {
@@ -496,7 +514,9 @@ export default function ModeSwitchScreen() {
               activeOpacity={0.85}
             >
               <MaterialCommunityIcons name="test-tube" size={20} color="#0EA5E9" />
-              <Text style={styles.testButtonText}>Test Your Learning Type</Text>
+              <Text style={styles.testButtonText}>
+                {allScoresZero ? "Retake Learning Type Assessment" : "Test Your Learning Type"}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -577,20 +597,22 @@ export default function ModeSwitchScreen() {
             style={[
               styles.primaryButton,
               dynamicStyles.primaryButton,
-              (!allTypesCompleted || checkingCompletion) && { opacity: 0.6 },
+              (!allTypesCompleted || checkingCompletion || allScoresZero) && { opacity: 0.6 },
             ]}
-            disabled={!allTypesCompleted || checkingCompletion}
+            disabled={!allTypesCompleted || checkingCompletion || allScoresZero}
             onPress={() => {
-              if (!allTypesCompleted) return;
+              if (!allTypesCompleted || allScoresZero) return;
               router.push({ pathname: "/topics", params: { subject: params.subject ?? "math" } });
             }}
           >
             <Text style={[styles.primaryButtonLabel, dynamicStyles.primaryButtonLabel]}>
               {checkingCompletion
                 ? "Checking learning type progress..."
-                : allTypesCompleted
-                  ? "View Topics"
-                  : "Complete All Learning Types to Continue"}
+                : allScoresZero
+                  ? "Retake Assessment to Continue"
+                  : allTypesCompleted
+                    ? "View Topics"
+                    : "Complete All Learning Types to Continue"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -825,6 +847,32 @@ const styles = StyleSheet.create({
     color: "#64748B",
     flex: 1,
     flexShrink: 1,
+  },
+  warningBanner: {
+    marginTop: 20,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+  },
+  warningContent: {
+    flex: 1,
+    gap: 4,
+  },
+  warningTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#92400E",
+  },
+  warningText: {
+    fontSize: 13,
+    fontFamily: "Roboto_400Regular",
+    color: "#78350F",
+    lineHeight: 18,
   },
   testButton: {
     marginTop: 20,
