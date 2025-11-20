@@ -42,7 +42,9 @@ export default function LoginScreen() {
       await storeToken(response.token);
       await storeUserData({
         email: response.email,
-        fullName: response.fullName,
+        first_name: response.first_name,
+        middle_name: response.middle_name,
+        last_name: response.last_name,
         avatarUrl: response.avatarUrl,
         preferredLanguage: response.preferredLanguage,
         learningStyle: response.learningStyle,

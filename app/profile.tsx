@@ -5,12 +5,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getUserData, removeToken } from "../lib/storage";
-
-const SUBJECT_ROWS = [
-  [{ label: "Mathematics" }, { label: "Science" }],
-  [{ label: "History" }, { label: "Notifications" }],
-  [{ label: "Language" }, { label: "Help & Support" }],
-];
+import { getUserSubjects, Subject } from "../lib/subjects-service";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -21,12 +16,16 @@ export default function ProfileScreen() {
   });
   const [userData, setUserData] = useState<{
     email?: string;
-    fullName?: string;
+    first_name?: string;
+    middle_name?: string | null;
+    last_name?: string;
     avatarUrl?: string | null;
     preferredLanguage?: string;
     learningStyle?: string;
   } | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
 
   const loadUserData = useCallback(async () => {
     try {
@@ -42,10 +41,26 @@ export default function ProfileScreen() {
     }
   }, []);
 
+  const loadSubjects = useCallback(async () => {
+    try {
+      setIsLoadingSubjects(true);
+      const subjectsData = await getUserSubjects();
+      if (subjectsData.success && subjectsData.subjects) {
+        setSubjects(subjectsData.subjects);
+      }
+    } catch (error) {
+      console.error("Error loading subjects:", error);
+      // Don't show error to user, just log it
+    } finally {
+      setIsLoadingSubjects(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadUserData();
-    }, [loadUserData])
+      loadSubjects();
+    }, [loadUserData, loadSubjects])
   );
 
   const handleLogout = () => {
@@ -117,12 +132,14 @@ export default function ProfileScreen() {
 
           <View style={styles.profileInfo}>
             <Text style={styles.name}>
-              {userData?.fullName || "User"}
+              {userData?.first_name && userData?.last_name
+                ? `${userData.first_name}${userData.middle_name ? ` ${userData.middle_name}` : ''} ${userData.last_name}`.trim()
+                : userData?.first_name || "User"}
             </Text>
             {userData?.email && (
               <Text style={styles.email}>{userData.email}</Text>
             )}
-            <TouchableOpacity activeOpacity={0.8}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => router.push("/edit-profile")}>
               <Text style={styles.editProfile}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
@@ -179,22 +196,54 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Subjects</Text>
             <View style={styles.listCard}>
-              {SUBJECT_ROWS.map((row, rowIndex) => (
-                <View
-                  key={rowIndex}
-                  style={[
-                    styles.listGridRow,
-                    rowIndex < SUBJECT_ROWS.length - 1 && styles.listGridRowDivider,
-                  ]}
-                >
-                  {row.map((item, idx) => (
-                    <TouchableOpacity key={item.label} style={styles.listGridItem} activeOpacity={0.85}>
-                      <Text style={styles.listLabel}>{item.label}</Text>
-                      <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-                    </TouchableOpacity>
-                  ))}
+              {isLoadingSubjects ? (
+                <View style={styles.subjectsLoadingContainer}>
+                  <ActivityIndicator size="small" color="#1FC7B6" />
+                  <Text style={styles.subjectsLoadingText}>Loading subjects...</Text>
                 </View>
-              ))}
+              ) : subjects.length === 0 ? (
+                <View style={styles.emptySubjectsContainer}>
+                  <MaterialCommunityIcons name="book-open-variant-outline" size={32} color="#94A3B8" />
+                  <Text style={styles.emptySubjectsText}>No subjects selected</Text>
+                  <TouchableOpacity
+                    style={styles.selectSubjectsButton}
+                    onPress={() => router.push("/subject-selection")}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.selectSubjectsButtonText}>Select Subjects</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                subjects.map((subject, index) => (
+                  <TouchableOpacity
+                    key={subject.id}
+                    style={[
+                      styles.subjectItem,
+                      index < subjects.length - 1 && styles.subjectItemDivider,
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/subject-overview",
+                        params: {
+                          subject: subject.id,
+                          subjectName: subject.name,
+                          subjectIcon: subject.icon,
+                          subjectColors: JSON.stringify(subject.colors),
+                        },
+                      })
+                    }
+                  >
+                    <View style={styles.subjectItemContent}>
+                      <View style={[styles.subjectIconWrapper, { backgroundColor: `${subject.colors[0]}20` }]}>
+                        <MaterialCommunityIcons name={subject.icon as never} size={20} color={subject.colors[0]} />
+                      </View>
+                      <Text style={styles.listLabel}>{subject.name}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                  </TouchableOpacity>
+                ))
+              )}
             </View>
           </View>
 
@@ -475,6 +524,65 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 18,
     fontFamily: "Montserrat_600SemiBold",
+    color: "#FFFFFF",
+  },
+  subjectItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  subjectItemDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  subjectItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  subjectIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  subjectsLoadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    gap: 12,
+  },
+  subjectsLoadingText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+  },
+  emptySubjectsContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+    gap: 12,
+  },
+  emptySubjectsText: {
+    fontSize: 14,
+    fontFamily: "Roboto_400Regular",
+    color: "#64748B",
+  },
+  selectSubjectsButton: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: "#1FC7B6",
+    borderRadius: 20,
+  },
+  selectSubjectsButtonText: {
+    fontSize: 13,
+    fontFamily: "Roboto_500Medium",
     color: "#FFFFFF",
   },
 });

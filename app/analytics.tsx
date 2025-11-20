@@ -24,20 +24,38 @@ interface LinePoints {
 }
 
 function toPercentages(arr: ScorePair[]): number[] {
-  return arr.map(([score, length]) =>
-    length === 0 ? 0 : (score / length) * 100
-  );
+  return arr.map(([score, length]) => {
+    // Handle invalid inputs
+    if (typeof score !== 'number' || typeof length !== 'number' || isNaN(score) || isNaN(length)) {
+      return 0;
+    }
+    if (length === 0) return 0;
+    const percentage = (score / length) * 100;
+    return isNaN(percentage) ? 0 : Math.max(0, Math.min(100, percentage)); // Clamp between 0-100
+  });
 }
 
 function toLinePoints(percentages: number[]): string {
   const count = percentages.length;
   if (count === 0) return "";
+  
+  // Handle single point case
+  if (count === 1) {
+    const percent = isNaN(percentages[0]) ? 0 : Math.max(0, Math.min(100, percentages[0]));
+    const y = 100 - percent;
+    return `0,${y.toFixed(0)}`;
+  }
 
   return percentages
     .map((percent, index) => {
+      // Validate and clamp percent value
+      const validPercent = isNaN(percent) ? 0 : Math.max(0, Math.min(100, percent));
       const x = (index / (count - 1)) * 250;
-      const y = 100 - percent;
-      return `${x.toFixed(0)},${y.toFixed(0)}`;
+      const y = 100 - validPercent;
+      // Ensure x and y are valid numbers
+      const validX = isNaN(x) ? 0 : Math.max(0, Math.min(250, x));
+      const validY = isNaN(y) ? 100 : Math.max(0, Math.min(100, y));
+      return `${validX.toFixed(0)},${validY.toFixed(0)}`;
     })
     .join(" ");
 }
@@ -269,22 +287,25 @@ export default function AnalyticsScreen() {
             <Text style={styles.cardTitle}>Subject Performance</Text>
             <View style={styles.performanceBarWrapper}>
               <View style={styles.overallBar}>
-                <View style={[styles.overallFill, { width: `${overallPercent}%` }]} />
+                <View style={[styles.overallFill, { width: `${isNaN(overallPercent) ? 0 : Math.max(0, Math.min(100, overallPercent))}%` }]} />
                 <View style={styles.overallPercentBadge}>
-                  <Text style={styles.overallPercentText}>{overallPercent}%</Text>
+                  <Text style={styles.overallPercentText}>{isNaN(overallPercent) ? 0 : Math.round(overallPercent)}%</Text>
                 </View>
               </View>
             </View>
             {subjectPerformance.length > 0 ? (
-              subjectPerformance.map((item) => (
-                <View key={item.label} style={styles.subjectRow}>
-                  <Text style={styles.subjectLabel}>{item.label}</Text>
-                  <View style={styles.subjectBar}>
-                    <View style={[styles.subjectFill, { width: `${item.percent}%`, backgroundColor: item.color }]} />
+              subjectPerformance.map((item) => {
+                const validPercent = isNaN(item.percent) ? 0 : Math.max(0, Math.min(100, item.percent));
+                return (
+                  <View key={item.label} style={styles.subjectRow}>
+                    <Text style={styles.subjectLabel}>{item.label}</Text>
+                    <View style={styles.subjectBar}>
+                      <View style={[styles.subjectFill, { width: `${validPercent}%`, backgroundColor: item.color }]} />
+                    </View>
+                    <Text style={styles.subjectPercent}>{Math.round(validPercent)}%</Text>
                   </View>
-                  <Text style={styles.subjectPercent}>{item.percent}%</Text>
-                </View>
-              ))
+                );
+              })
             ) : (
               <Text style={styles.noDataText}>No subject performance data available</Text>
             )}
@@ -296,15 +317,21 @@ export default function AnalyticsScreen() {
               <>
                 <View style={styles.engagementStats}>
                   <View style={styles.engagementStat}>
-                    <Text style={styles.engagementStatValue}>{engagementData.engagementScore || 0}%</Text>
+                    <Text style={styles.engagementStatValue}>
+                      {isNaN(engagementData.engagementScore) ? 0 : Math.round(engagementData.engagementScore)}%
+                    </Text>
                     <Text style={styles.engagementStatLabel}>Engagement</Text>
                   </View>
                   <View style={styles.engagementStat}>
-                    <Text style={styles.engagementStatValue}>{engagementData.avgFocus || 0}%</Text>
+                    <Text style={styles.engagementStatValue}>
+                      {isNaN(engagementData.avgFocus) ? 0 : Math.round(engagementData.avgFocus)}%
+                    </Text>
                     <Text style={styles.engagementStatLabel}>Avg Focus</Text>
                   </View>
                   <View style={styles.engagementStat}>
-                    <Text style={styles.engagementStatValue}>{Math.round((engagementData.totalTime || 0) / 60)}m</Text>
+                    <Text style={styles.engagementStatValue}>
+                      {Math.round((engagementData.totalTime || 0) / 60) || 0}m
+                    </Text>
                     <Text style={styles.engagementStatLabel}>Study Time</Text>
                   </View>
                 </View>

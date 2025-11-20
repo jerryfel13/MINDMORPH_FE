@@ -27,7 +27,9 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string;
   email: string;
-  fullName: string;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
   avatarUrl: string | null;
   preferredLanguage: string;
   learningStyle: string;
@@ -77,7 +79,9 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
 export async function register(userData: {
   email: string;
   password: string;
-  fullName: string;
+  first_name: string;
+  middle_name?: string;
+  last_name: string;
   avatarUrl?: string;
   preferredLanguage?: string;
   learningStyle?: string;
@@ -125,6 +129,47 @@ export async function getProfile(token: string): Promise<any> {
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || data.message || `Failed to fetch profile: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error: any) {
+    if (error.message === 'Network request failed' || error.message?.includes('Network')) {
+      throw new Error(
+        `Cannot connect to server at ${API_BASE_URL}. Make sure the server is running and the IP address is correct.`
+      );
+    }
+    throw error;
+  }
+}
+
+/**
+ * Update user profile
+ */
+export async function updateProfile(
+  token: string,
+  profileData: {
+    first_name?: string;
+    middle_name?: string | null;
+    last_name?: string;
+    avatar_url?: string | null;
+    preferred_language?: string;
+    learning_style?: string;
+  }
+): Promise<any> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(profileData),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || data.message || `Failed to update profile: ${response.status}`);
     }
 
     const data = await response.json();

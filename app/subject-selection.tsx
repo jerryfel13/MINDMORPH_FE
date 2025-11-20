@@ -298,18 +298,24 @@ export default function SubjectSelectionScreen() {
           style={styles.subjectCardGradient}
         >
           <View style={styles.subjectCardContent}>
-            <View style={styles.subjectIconWrapper}>
-              <MaterialCommunityIcons name={subject.icon as any} size={24} color="#FFFFFF" />
-            </View>
-            <Text style={styles.subjectName}>{subject.name}</Text>
-            <Text style={styles.subjectDescription} numberOfLines={2}>
-              {subject.description}
-            </Text>
-            {isSelected && (
-              <View style={styles.selectedBadge}>
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+            <View style={styles.subjectCardHeader}>
+              <View style={styles.subjectIconWrapper}>
+                <MaterialCommunityIcons name={subject.icon as any} size={24} color="#FFFFFF" />
               </View>
-            )}
+              {isSelected && (
+                <View style={styles.selectedBadge}>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                </View>
+              )}
+            </View>
+            <View style={styles.subjectTextContainer}>
+              <Text style={styles.subjectName} numberOfLines={2} ellipsizeMode="tail">
+                {subject.name}
+              </Text>
+              <Text style={styles.subjectDescription} numberOfLines={2} ellipsizeMode="tail">
+                {subject.description}
+              </Text>
+            </View>
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -919,32 +925,51 @@ const styles = StyleSheet.create({
   },
   subjectCardGradient: {
     padding: 16,
-    minHeight: 140,
+    height: 160,
+    justifyContent: "space-between",
   },
   subjectCardContent: {
-    gap: 8,
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  subjectCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
   },
   subjectIconWrapper: {
-    alignSelf: "flex-start",
     padding: 8,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 8,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  subjectTextContainer: {
+    flex: 1,
+    justifyContent: "flex-start",
+    gap: 6,
+    minHeight: 60,
   },
   subjectName: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Montserrat_600SemiBold",
     color: "#FFFFFF",
+    lineHeight: 20,
+    minHeight: 40,
   },
   subjectDescription: {
     fontSize: 12,
     fontFamily: "Roboto_400Regular",
     color: "rgba(255, 255, 255, 0.9)",
     lineHeight: 16,
+    minHeight: 32,
   },
   selectedBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
+    marginTop: -4,
+    marginRight: -4,
   },
   interestsInputContainer: {
     gap: 12,

@@ -116,10 +116,8 @@ export default function JourneyScreen() {
       
       // Load user data
       const userData = await getUserData();
-      if (userData?.fullName) {
-        const nameParts = userData.fullName.trim().split(" ");
-        const first = nameParts[0] || "";
-        setFirstName(first);
+      if (userData?.first_name) {
+        setFirstName(userData.first_name);
       }
 
       // Load user subjects and archived subjects in parallel
@@ -683,11 +681,11 @@ const styles = StyleSheet.create({
     width: "48%",
     borderRadius: 28,
     overflow: "hidden",
-    shadowColor: "#1890FF",
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowColor: "#1FC7B6",
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
     borderWidth: 2,
     borderColor: "#E2E8F0",
     borderStyle: "dashed",

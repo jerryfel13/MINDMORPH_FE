@@ -67,12 +67,12 @@ export default function RegistrationScreen() {
 
   try {
     // --- Call REGISTER API ---
-    const fullName = `${firstName} ${middleName} ${lastName}`.trim();
-
     const registerResponse = await registerAPI({
       email: email.trim(),
       password: password.trim(),
-      fullName,
+      first_name: firstName.trim(),
+      middle_name: middleName.trim() || undefined,
+      last_name: lastName.trim(),
       avatarUrl: avatarUrl || undefined,
       preferredLanguage,
       learningStyle,
@@ -88,7 +88,9 @@ export default function RegistrationScreen() {
     await storeToken(loginResponse.token);
     await storeUserData({
       email: loginResponse.email,
-      fullName: loginResponse.fullName,
+      first_name: loginResponse.first_name,
+      middle_name: loginResponse.middle_name,
+      last_name: loginResponse.last_name,
       avatarUrl: loginResponse.avatarUrl,
       preferredLanguage: loginResponse.preferredLanguage,
       learningStyle: loginResponse.learningStyle,

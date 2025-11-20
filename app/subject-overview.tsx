@@ -218,13 +218,15 @@ export default function SubjectOverviewScreen() {
             >
               <MaterialCommunityIcons name="chevron-left" size={24} color="#0F172A" />
             </TouchableOpacity>
-            <View>
+            <View style={styles.titleContainer}>
               <Text style={styles.subtitle}>Learning Path</Text>
-              <Text style={styles.title}>{subject.title}</Text>
+              <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+                {subject.title}
+              </Text>
             </View>
             <View style={styles.progressBadge}>
               <Text style={styles.progressLabel}>Progress</Text>
-              <Text style={styles.progressValue}>{realProgress}%</Text>
+              <Text style={styles.progressValue}>{realProgress || 0}%</Text>
             </View>
           </View>
 
@@ -387,8 +389,9 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
-    columnGap: 16,
+    alignItems: "flex-start",
+    columnGap: 12,
+    marginTop: 8,
   },
   backButton: {
     height: 48,
@@ -402,6 +405,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
+    flexShrink: 0,
+  },
+  titleContainer: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   subtitle: {
     fontSize: 13,
@@ -414,10 +424,12 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     fontFamily: "Montserrat_600SemiBold",
     color: "#0F172A",
+    flexShrink: 1,
   },
   progressBadge: {
-    marginLeft: "auto",
     alignItems: "flex-end",
+    flexShrink: 0,
+    minWidth: 70,
   },
   progressLabel: {
     fontSize: 11,

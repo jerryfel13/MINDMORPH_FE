@@ -37,7 +37,7 @@ export const SUBJECTS: Subject[] = [
     title: "History",
     progress: 45,
     colors: ["#FB923C", "#F97316"],
-    icon: "scroll",
+    icon: "scroll-text",
     summary: "Narrative timelines of key ancient civilizations.",
     nextQuiz: "Quiz: Mediterranean Empires",
     recommendedModes: ["audio", "text"],
